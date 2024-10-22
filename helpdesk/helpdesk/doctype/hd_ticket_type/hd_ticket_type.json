@@ -10,21 +10,13 @@
  "engine": "InnoDB",
  "field_order": [
   "is_system",
-  "description",
-  "priority"
+  "description"
  ],
  "fields": [
   {
    "fieldname": "description",
    "fieldtype": "Small Text",
    "label": "Description"
-  },
-  {
-   "fieldname": "priority",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Priority",
-   "options": "HD Ticket Priority"
   },
   {
    "default": "0",
@@ -35,7 +27,7 @@
   }
  ],
  "links": [],
- "modified": "2023-07-11 21:50:20.444486",
+ "modified": "2024-10-21 09:28:49.743249",
  "modified_by": "Administrator",
  "module": "Helpdesk",
  "name": "HD Ticket Type",

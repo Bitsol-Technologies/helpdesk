@@ -63,7 +63,10 @@ def get_one(name):
             "email_id": ticket.raised_by,
             "name": ticket.raised_by.split("@")[0],
         }
-
+    template = get_template(ticket.template or DEFAULT_TICKET_TEMPLATE)
+    fields = template.get("fields", [])
+    fields = [field for field in fields if field.get('label') != 'Priority']
+    template["fields"] = fields
     return {
         **ticket,
         "comments": get_comments(name),
@@ -71,7 +74,7 @@ def get_one(name):
         "contact": contact,
         "history": get_history(name),
         "tags": get_tags(name),
-        "template": get_template(ticket.template or DEFAULT_TICKET_TEMPLATE),
+        "template": template,
         "views": get_views(name),
         "_form_script": get_form_script("HD Ticket"),
     }

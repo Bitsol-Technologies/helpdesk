@@ -115,13 +115,26 @@ def get_list_data(
     # flake8: noqa
     filters: dict = {},
     order_by: str = "modified desc",
+    start: int = 0,
     page_length=20,
     columns=None,
     rows=None,
     show_customer_portal_fields=False,
 ):
     is_default = True
+    # if user is not admin then filter will be applied 
+    current_user = frappe.session.user
+    if current_user != "Administrator":
+        teams = frappe.get_all('HD Team Member', 
+                            filters={'user': current_user}, 
+                            fields=['parent'])
 
+        # Extract the list of team names
+        team_names = [team['parent'] for team in teams]
+        if not filters:
+            filters = {
+                "agent_group": ["in", team_names]
+            }
     if columns or rows:
         is_default = False
         columns = frappe.parse_json(columns)
@@ -167,7 +180,8 @@ def get_list_data(
             fields=rows,
             filters=filters,
             order_by=order_by,
-            page_length=page_length,
+            limit_start=start,
+            limit_page_length=page_length
         )
         or []
     )

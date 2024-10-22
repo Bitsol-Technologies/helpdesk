@@ -17,6 +17,7 @@
   "ticket_type",
   "agent_group",
   "ticket_split_from",
+  "expected_due_date",
   "sb_details",
   "description",
   "template",
@@ -44,7 +45,6 @@
   "opening_time",
   "resolution_date",
   "resolution_time",
-  "user_resolution_time",
   "reference_tab",
   "additional_info",
   "contact",
@@ -103,26 +103,22 @@
    "search_index": 1
   },
   {
-   "fieldname": "priority",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Priority",
-   "options": "HD Ticket Priority"
-  },
-  {
    "fieldname": "cb00",
    "fieldtype": "Column Break"
   },
   {
    "fieldname": "ticket_type",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Ticket Type",
-   "options": "HD Ticket Type"
+   "options": "HD Ticket Type",
+   "reqd": 1
   },
   {
    "fieldname": "agent_group",
    "fieldtype": "Link",
+   "in_global_search": 1,
+   "in_standard_filter": 1,
    "label": "Agent Group",
    "options": "HD Team"
   },
@@ -299,12 +295,6 @@
    "read_only": 1
   },
   {
-   "fieldname": "user_resolution_time",
-   "fieldtype": "Duration",
-   "label": "User Resolution Time",
-   "read_only": 1
-  },
-  {
    "collapsible": 1,
    "fieldname": "additional_info",
    "fieldtype": "Section Break",
@@ -405,12 +395,24 @@
    "fieldname": "meta_tab",
    "fieldtype": "Tab Break",
    "label": "Meta"
+  },
+  {
+   "fieldname": "expected_due_date",
+   "fieldtype": "Datetime",
+   "label": "Expected Due Date"
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Link",
+   "label": "Priority",
+   "options": "HD Ticket Priority",
+   "reqd": 1
   }
  ],
  "icon": "fa fa-issue",
  "idx": 61,
  "links": [],
- "modified": "2023-11-23 13:44:59.105648",
+ "modified": "2024-10-22 11:02:40.516750",
  "modified_by": "Administrator",
  "module": "Helpdesk",
  "name": "HD Ticket",
@@ -449,6 +451,18 @@
    "read": 1,
    "report": 1,
    "role": "All",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Employee",
    "share": 1,
    "write": 1
   }

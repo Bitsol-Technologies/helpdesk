@@ -591,17 +591,47 @@ class HDTicket(Document):
         c.status = "Linked"
         c.reference_doctype = "HD Ticket"
         c.reference_name = self.name
-        c.ignore_permissions = True
-        c.ignore_mandatory = True
+        
+        # Save the communication first
+        c.insert(ignore_permissions=True)
+
+        # Handle attachments
+        if attachments:
+            for attachment in attachments:
+                if isinstance(attachment, str):
+                    # If attachment is a file URL
+                    file_url = attachment
+                elif isinstance(attachment, dict) and "file_url" in attachment:
+                    # If attachment is a dict with file_url
+                    file_url = attachment["file_url"]
+                else:
+                    continue
+
+                # Create a new File document and attach it to the Communication
+                file_doc = frappe.get_doc({
+                    "doctype": "File",
+                    "file_url": file_url,
+                    "attached_to_doctype": "Communication",
+                    "attached_to_name": c.name,
+                    "folder": "Home/Helpdesk",
+                    "is_private": 1,  # Set to 1 if you want files to be private
+                })
+                file_doc.insert(ignore_permissions=True)
+
+                # Also link the file to the HD Ticket
+                frappe.get_doc({
+                    "doctype": "File",
+                    "file_url": file_url,
+                    "attached_to_doctype": "HD Ticket",
+                    "attached_to_name": self.name,
+                    "folder": "Home/Helpdesk",
+                    "is_private": 1,  # Set to 1 if you want files to be private
+                }).insert(ignore_permissions=True)
+
+        # Save the communication again to ensure all changes are recorded
         c.save(ignore_permissions=True)
 
-        if not len(attachments):
-            return
-        QBFile = frappe.qb.DocType("File")
-        condition_name = [QBFile.name == i["name"] for i in attachments]
-        frappe.qb.update(QBFile).set(QBFile.attached_to_name, c.name).set(
-            QBFile.attached_to_doctype, "Communication"
-        ).where(Criterion.any(condition_name)).run()
+        return c
 
     @frappe.whitelist()
     def mark_seen(self):
