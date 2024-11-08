@@ -106,6 +106,11 @@ const menuOptions = computed(() => {
 
 const customerPortalDropdown = computed(() => [
   {
+    label: "Home",
+    icon: "home",
+    onClick: () => window.location.replace(window.location.origin + "/app"),
+  },
+  {
     label: "Log out",
     icon: "log-out",
     onClick: () => authStore.logout(),
