@@ -4,7 +4,7 @@ from frappe.model.document import get_controller
 from frappe.utils.caching import redis_cache
 from pypika import Criterion
 
-from helpdesk.utils import check_permissions
+from helpdesk.utils import check_permissions, is_agent
 
 
 @frappe.whitelist()
@@ -136,7 +136,7 @@ def get_list_data(
 
         # Extract the list of team names
         team_names = [team['parent'] for team in teams]
-        if not filters:
+        if not filters and is_agent(current_user):
             filters = {
                 "agent_group": ["in", team_names]
             }
