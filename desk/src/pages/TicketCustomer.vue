@@ -6,7 +6,7 @@
       </template>
       <template #right-header>
         <Button
-          v-if="showResolveButton"
+          v-if="ticket.data.status !== 'Closed'"
           label="Close"
           theme="gray"
           variant="solid"
@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, provide, ref } from "vue";
+import { computed, onMounted, onUnmounted, provide, ref } from "vue";
 import { createResource, Button, Breadcrumbs } from "frappe-ui";
 import { Icon } from "@iconify/vue";
 import { useError } from "@/composables/error";
@@ -67,9 +67,12 @@ import TicketTextEditor from "./ticket/TicketTextEditor.vue";
 import { ITicket } from "./ticket/symbols";
 import { useRouter } from "vue-router";
 import { createToast } from "@/utils";
+import { socket } from "@/socket";
 import { LayoutHeader } from "@/components";
 import TicketCustomerSidebar from "@/components/ticket/TicketCustomerSidebar.vue";
 import { useScreenSize } from "@/composables/screen";
+import { useConfigStore } from "@/stores/config";
+import { confirmDialog } from "frappe-ui";
 interface P {
   ticketId: string;
 }
@@ -126,8 +129,20 @@ function handleClose() {
   if (showFeedback.value) {
     showFeedbackDialog.value = true;
   } else {
-    setValue.submit({ fieldname: "status", value: "Closed" });
+    showConfirmationDialog();
   }
+}
+
+function showConfirmationDialog() {
+  confirmDialog({
+    title: "Close Ticket",
+    message: "Are you sure you want to close this ticket?",
+    onConfirm: ({ hideDialog }: { hideDialog: Function }) => {
+      ticket.data.status = "Closed";
+      setValue.submit({ fieldname: "status", value: "Closed" });
+      hideDialog();
+    },
+  });
 }
 
 const setValue = createResource({
@@ -157,21 +172,28 @@ const breadcrumbs = computed(() => {
   return items;
 });
 
-const showReopenButton = computed(
-  () => ticket.data.status === "Resolved" && !ticket.data.feedback
-);
-const showResolveButton = computed(() =>
-  ["Open", "Replied"].includes(ticket.data.status)
-);
-
 const showEditor = computed(() => ticket.data.status !== "Closed");
 
 // this handles whether the ticket was raised and then was closed without any reply from the agent.
+const { isFeedbackMandatory } = useConfigStore();
 const showFeedback = computed(() => {
-  return ticket.data?.communications?.some((c) => {
-    if (c.sender !== ticket.data.raised_by) {
-      return true;
+  const hasAgentCommunication = ticket.data?.communications?.some(
+    (c) => c.sender !== ticket.data.raised_by
+  );
+  return hasAgentCommunication && isFeedbackMandatory;
+});
+
+onMounted(() => {
+  document.title = props.ticketId;
+  socket.on("helpdesk:ticket-update", (ticketID) => {
+    if (ticketID === Number(props.ticketId)) {
+      ticket.reload();
     }
   });
+});
+
+onUnmounted(() => {
+  document.title = "Helpdesk";
+  socket.off("helpdesk:ticket-update");
 });
 </script>
