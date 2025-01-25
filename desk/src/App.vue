@@ -11,11 +11,11 @@ import { Toasts } from "frappe-ui";
 import { createToast } from "@/utils";
 import { useConfigStore } from "@/stores/config";
 import KeymapDialog from "@/pages/KeymapDialog.vue";
-import { init as initTelemetry, stopSession } from "@/telemetry";
+import { stopSession } from "@/telemetry";
 import { Dialogs } from "frappe-ui";
 useConfigStore();
 
-onMounted(async () => {
+onMounted(() => {
   window.addEventListener("online", () => {
     createToast({
       title: "You are now online",
@@ -31,7 +31,6 @@ onMounted(async () => {
       iconClasses: "stroke-red-600",
     });
   });
-  await initTelemetry();
 });
 
 onUnmounted(() => {

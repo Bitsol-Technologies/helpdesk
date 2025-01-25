@@ -5,8 +5,6 @@ import { useUserStore } from "@/stores/user";
 import { useScreenSize } from "@/composables/screen";
 const { isMobileView } = useScreenSize();
 
-export const ONBOARDING_PAGE = "Setup";
-
 export const CUSTOMER_PORTAL_NEW_TICKET = "TicketNew";
 export const CUSTOMER_PORTAL_TICKET = "TicketCustomer";
 
@@ -180,22 +178,22 @@ const routes = [
       {
         path: "customers",
         name: AGENT_PORTAL_CUSTOMER_LIST,
-        component: () => import("@/pages/desk/customer/CustomerList.vue"),
+        component: () => import("@/pages/desk/customer/Customers.vue"),
       },
       {
         path: "contacts",
         name: AGENT_PORTAL_CONTACT_LIST,
-        component: () => import("@/pages/desk/contact/ContactList.vue"),
+        component: () => import("@/pages/desk/contact/Contacts.vue"),
       },
       {
         path: "agents",
         name: AGENT_PORTAL_AGENT_LIST,
-        component: () => import("@/pages/desk/agent/AgentList.vue"),
+        component: () => import("@/pages/desk/agent/Agents.vue"),
       },
       {
         path: "teams",
         name: AGENT_PORTAL_TEAM_LIST,
-        component: () => import("@/pages/desk/team/TeamList.vue"),
+        component: () => import("@/pages/desk/team/Teams.vue"),
       },
       {
         path: "teams/:teamId",
@@ -208,20 +206,9 @@ const routes = [
         name: "CannedResponses",
         component: () => import("@/pages/CannedResponses.vue"),
       },
-      {
-        path: "escalation-rules",
-        name: AGENT_PORTAL_ESCALATION_RULE_LIST,
-        component: () =>
-          import("@/pages/desk/escalation/EscalationRuleList.vue"),
-      },
     ],
   },
   // Additonal routes
-  {
-    path: "/onboarding",
-    name: ONBOARDING_PAGE,
-    component: () => import("@/pages/onboarding/SimpleOnboarding.vue"),
-  },
   {
     path: "/:pathMatch(.*)*",
     name: "Invalid Page",
@@ -240,11 +227,9 @@ export const router = createRouter({
 
 router.beforeEach(async (to, _, next) => {
   const authStore = useAuthStore();
-  const userStore = useUserStore();
 
   if (authStore.isLoggedIn) {
     await authStore.init();
-    await userStore.users.fetch();
   }
 
   if (!authStore.isLoggedIn) {
@@ -252,4 +237,11 @@ router.beforeEach(async (to, _, next) => {
   } else {
     next();
   }
+});
+
+router.afterEach(async (to) => {
+  const isCustomerPortal = to.meta.public ?? false;
+  if (isCustomerPortal) return;
+  const userStore = useUserStore();
+  await userStore.users.fetch();
 });

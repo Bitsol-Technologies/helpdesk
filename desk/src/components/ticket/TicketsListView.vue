@@ -71,8 +71,8 @@
               {{ dayjs.tz(item).fromNow() }}
             </Tooltip>
           </div>
-          <div v-else-if="column.key === 'agent_group'">
-            {{ item || "-" }}
+          <div v-else-if="column.key === 'agent_group'" class="truncate">
+            {{ item }}
           </div>
           <div v-else-if="column.key === 'resolution_by'">
             <Badge
@@ -102,7 +102,7 @@
         </ListRowItem>
       </ListRow>
     </ListRows>
-    <ListSelectBanner v-if="!isCustomerPortal">
+    <ListSelectBanner>
       <template #actions="{ selections }">
         <Dropdown
           :options="[

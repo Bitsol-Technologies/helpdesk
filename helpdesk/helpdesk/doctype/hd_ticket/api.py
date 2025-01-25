@@ -15,12 +15,13 @@ from helpdesk.utils import check_permissions, get_customer, is_agent
 def new(doc, attachments=[]):
     doc["doctype"] = "HD Ticket"
     doc["via_customer_portal"] = bool(frappe.session.user)
+    doc["attachments"] = attachments
     d = frappe.get_doc(doc).insert()
     return d
 
 
 @frappe.whitelist()
-def get_one(name):
+def get_one(name, is_customer_portal=False):
     check_permissions("HD Ticket", None)
     QBContact = frappe.qb.DocType("Contact")
     QBTicket = frappe.qb.DocType("HD Ticket")
@@ -75,7 +76,9 @@ def get_one(name):
         "tags": get_tags(name),
         "template": template,
         "views": get_views(name),
-        "_form_script": get_form_script("HD Ticket"),
+        "_form_script": get_form_script(
+            "HD Ticket", is_customer_portal=is_customer_portal
+        ),
     }
 
 

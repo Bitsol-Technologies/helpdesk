@@ -143,6 +143,7 @@ const agentPortalDropdown = computed(() => [
     label: "Settings",
     icon: "settings",
     onClick: () => (showSettingsModal.value = true),
+    condition: () => authStore.isAdmin,
   },
   {
     label: "Log out",
