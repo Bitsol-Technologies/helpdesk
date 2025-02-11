@@ -1,7 +1,5 @@
 export { default as AttachmentItem } from "./AttachmentItem.vue";
 export { default as CommandPalette } from "./command-palette/CP.vue";
-export { default as HCard } from "./HCard.vue";
-export { default as ListView } from "./list-view/LV.vue";
 export { default as NestedPopover } from "./NestedPopover.vue";
 export { default as Notifications } from "./notifications/Notifications.vue";
 export { default as PageTitle } from "./PageTitle.vue";
@@ -28,3 +26,6 @@ export { default as AssignmentModal } from "./AssignmentModal.vue";
 export { default as Autocomplete } from "./Autocomplete.vue";
 export { default as CannedResponseSelectorModal } from "./CannedResponseSelectorModal.vue";
 export { default as FadedScrollableDiv } from "./FadedScrollableDiv.vue";
+export { default as AutocompleteNew } from "./frappe-ui/Autocomplete.vue";
+export { default as Link } from "./frappe-ui/Link.vue";
+export { default as ListViewBuilder } from "./ListViewBuilder.vue";

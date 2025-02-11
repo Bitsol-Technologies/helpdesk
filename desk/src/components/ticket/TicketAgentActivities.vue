@@ -2,10 +2,14 @@
   <ActivityHeader :title="title" />
   <div class="flex flex-col flex-1 overflow-y-auto">
     <div v-if="activities.length" class="activities flex-1 h-full mt-1">
-      <div v-for="(activity, i) in activities" :key="activity.key">
+      <div
+        v-for="(activity, i) in activities"
+        :key="activity.key"
+        class="activity"
+      >
         <!-- single activity -->
         <div
-          class="w-full activity px-3 sm:px-10 grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 sm:gap-4"
+          class="w-full px-3 sm:px-10 grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 sm:gap-4"
         >
           <div
             class="relative flex justify-center after:absolute after:left-[50%] after:top-0 after:-z-10 after:border-l after:border-gray-200"
@@ -32,7 +36,7 @@
               <DotIcon v-else class="text-gray-600" />
             </div>
           </div>
-          <div class="mb-4 w-full">
+          <div class="mb-4 flex flex-1">
             <EmailArea
               v-if="activity.type === 'email'"
               :activity="activity"
@@ -70,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { Ref, inject, h, computed, onMounted, watch } from "vue";
+import { Ref, inject, h, computed, onMounted, watch, PropType } from "vue";
 import { useElementVisibility } from "@vueuse/core";
 import {
   DotIcon,
@@ -82,10 +86,10 @@ import {
 import { EmailArea, CommentBox, HistoryBox } from "@/components";
 import { useUserStore } from "@/stores/user";
 import { Avatar } from "frappe-ui";
-
+import { TicketActivity } from "@/types";
 const props = defineProps({
   activities: {
-    type: Array,
+    type: Array as PropType<TicketActivity[]>,
     required: true,
   },
   title: {
