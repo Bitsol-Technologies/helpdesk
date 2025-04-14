@@ -5,6 +5,8 @@ import { useAuthStore } from "@/stores/auth";
 import { useError } from "@/composables/error";
 import { Notification, Resource } from "@/types";
 
+import { isCustomerPortal } from "@/utils";
+
 export const useNotificationStore = defineStore("notification", () => {
   const authStore = useAuthStore();
   const visible = ref(false);
@@ -25,13 +27,12 @@ export const useNotificationStore = defineStore("notification", () => {
       "user_to",
     ],
     orderBy: "creation desc",
-    auto: true,
+    auto: !isCustomerPortal.value,
   });
   const clear = createResource({
     url: "helpdesk.helpdesk.doctype.hd_notification.utils.clear",
     auto: false,
     onSuccess: () => resource.reload(),
-    onError: useError(),
   });
 
   const read = (ticket) => {
@@ -42,7 +43,6 @@ export const useNotificationStore = defineStore("notification", () => {
         ticket: ticket,
       },
       onSuccess: () => resource.reload(),
-      onError: useError(),
     });
   };
 

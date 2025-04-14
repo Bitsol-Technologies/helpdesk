@@ -63,6 +63,7 @@ import { useAttrs, computed, ref } from "vue";
 import { createResource } from "frappe-ui";
 import Autocomplete from "./Autocomplete.vue";
 import { watchDebounced } from "@vueuse/core";
+import { watch } from "vue";
 
 const props = defineProps({
   doctype: {
@@ -127,6 +128,22 @@ watchDebounced(
   { debounce: 300, immediate: true }
 );
 
+watch(
+  () => props?.filters,
+  (newVal) => {
+    options.update({
+      params: {
+        txt: text.value,
+        doctype: props.doctype,
+        filters: newVal,
+        page_length: props.pageLength,
+      },
+    });
+    options.reload();
+  },
+  { deep: true }
+);
+
 const options = createResource({
   url: "frappe.desk.search.search_link",
   cache: [props.doctype, text.value, props.hideMe],
@@ -144,12 +161,16 @@ const options = createResource({
         label: option?.label || option.value,
       };
     });
-    // if (!props.hideMe && props.doctype == 'User') {
-    //   allData.unshift({
-    //     label: '@me',
-    //     value: '@me',
-    //   })
-    // }
+
+    if (
+      !props.hideMe &&
+      (props.doctype == "User" || props.doctype == "HD Agent")
+    ) {
+      allData.unshift({
+        label: "@me",
+        value: "@me",
+      });
+    }
     return allData;
   },
 });

@@ -1,6 +1,8 @@
 <template>
   <div class="flex w-[382px] flex-col justify-between border-l">
-    <div class="h-[2.83rem] flex items-center justify-between border-b px-5">
+    <div
+      class="flex h-10.5 cursor-copy items-center border-b px-5 py-2.5 text-lg font-medium text-ink-gray-9"
+    >
       <span
         class="cursor-copy text-lg font-semibold"
         @click="copyToClipboard(ticket.name, ticket.name)"
@@ -14,19 +16,11 @@
     <!-- feedback component -->
     <TicketFeedback
       v-if="ticket.feedback_rating"
-      class="border-b px-6 py-3 text-base text-gray-600"
+      class="py-3 !px-6 !gap-3 text-base text-gray-600"
       :ticket="ticket"
     />
     <!-- ticket details -->
-    <TicketAgentDetails
-      :agreement-status="ticket.agreement_status"
-      :first-responded-on="ticket.first_responded_on"
-      :response-by="ticket.response_by"
-      :resolution-date="ticket.resolution_date"
-      :resolution-by="ticket.resolution_by"
-      :ticket-created-on="ticket.creation"
-      :source="ticket.via_customer_portal ? 'Portal' : 'Mail'"
-    />
+    <TicketAgentDetails :ticket="ticket" />
     <!-- fields -->
     <TicketAgentFields :ticket="ticket" @update="update" />
   </div>
@@ -48,6 +42,9 @@ const props = defineProps({
 const emit = defineEmits(["update", "email:open"]);
 
 function update(val) {
+  if (typeof val.value === "object") {
+    val.value = val.value.target?.value || null;
+  }
   emit("update", val);
 }
 </script>

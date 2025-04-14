@@ -31,7 +31,7 @@
         <div
           v-for="cannedResponse in cannedResponses.data"
           :key="cannedResponse.name"
-          class="group flex h-60 cursor-pointer flex-col justify-between gap-2 rounded-lg border px-5 py-4 shadow-sm hover:bg-gray-50"
+          class="group flex h-60 cursor-pointer flex-col justify-between gap-2 rounded-lg border px-4 py-3 pt-2 shadow-sm hover:bg-gray-50"
           @click="editItem(cannedResponse)"
         >
           <div class="flex items-center justify-between">
@@ -113,6 +113,7 @@
 </template>
 <script setup lang="ts">
 import { ref } from "vue";
+import { useRoute } from "vue-router";
 import {
   createListResource,
   Breadcrumbs,
@@ -134,16 +135,19 @@ const { getUser } = useUserStore();
 const breadcrumbs = [
   { label: "Canned Responses", route: { name: "CannedResponses" } },
 ];
+const route = useRoute();
 
 const title = ref(null);
 const message = ref(null);
 const name = ref(null);
-const showNewDialog = ref(false);
+const isNew = route.hash.split("#")[1] === "new";
+const showNewDialog = ref(isNew || false);
 
 const cannedResponses = createListResource({
   doctype: "HD Canned Response",
   fields: ["name", "title", "message", "owner", "modified"],
   auto: true,
+  orderBy: "modified desc",
 });
 
 function editItem(cannedResponse) {

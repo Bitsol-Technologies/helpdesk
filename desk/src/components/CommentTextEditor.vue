@@ -6,6 +6,7 @@
       'prose-sm max-w-none',
       editable &&
         'min-h-[7rem] mx-10 max-h-[50vh] overflow-y-auto border-t py-3',
+      getFontFamily(newComment),
     ]"
     :content="newComment"
     :starterkit-options="{ heading: { levels: [2, 3, 4, 5, 6] } }"
@@ -55,7 +56,10 @@
                   @click="openFileSelector()"
                 >
                   <template #icon>
-                    <AttachmentIcon class="h-4" />
+                    <AttachmentIcon
+                      class="h-4"
+                      style="color: #000000; stroke-width: 1.5 !important"
+                    />
                   </template>
                 </Button>
               </template>
@@ -91,7 +95,7 @@
   </TextEditor>
 </template>
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
 import {
   TextEditorFixedMenu,
   TextEditor,
@@ -104,10 +108,12 @@ import { AttachmentItem } from "@/components/";
 import { useAgentStore } from "@/stores/agent";
 import { useStorage } from "@vueuse/core";
 import { PreserveVideoControls } from "@/tiptap-extensions";
-import { textEditorMenuButtons } from "@/utils";
+import { isContentEmpty, textEditorMenuButtons, getFontFamily } from "@/utils";
 
 const { agents: agentsList } = useAgentStore();
-
+onMounted(() => {
+  agentsList.fetch();
+});
 const props = defineProps({
   placeholder: {
     type: String,
@@ -123,12 +129,12 @@ const props = defineProps({
   },
 });
 
-const doc = defineModel();
-const attachments = ref([]);
 const emit = defineEmits(["submit", "discard"]);
-const newComment = useStorage("commentBoxContent", "");
+const doc = defineModel();
+const attachments = useStorage("commentBoxAttachments" + doc.value.name, []);
+const newComment = useStorage("commentBoxContent" + doc.value.name, "");
 const commentEmpty = computed(() => {
-  return !newComment.value || newComment.value === "<p></p>";
+  return isContentEmpty(newComment.value);
 });
 const loading = ref(false);
 
@@ -146,6 +152,9 @@ function removeAttachment(attachment) {
 }
 
 async function submitComment() {
+  if (isContentEmpty(newComment.value)) {
+    return;
+  }
   const comment = createResource({
     url: "run_doc_method",
     makeParams: () => ({
@@ -160,6 +169,8 @@ async function submitComment() {
     onSuccess: () => {
       emit("submit");
       loading.value = false;
+      attachments.value = null;
+      newComment.value = null;
     },
     onError: () => {
       loading.value = false;
@@ -168,4 +179,7 @@ async function submitComment() {
 
   comment.submit();
 }
+defineExpose({
+  submitComment,
+});
 </script>

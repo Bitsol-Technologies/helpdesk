@@ -56,7 +56,8 @@ def add_default_sla():
     add_default_ticket_priorities()
     add_default_holiday_list()
     enable_track_service_level_agreement_in_support_settings()
-
+    if frappe.db.exists("HD Service Level Agreement", "Default"):
+        return
     sla_doc = frappe.new_doc("HD Service Level Agreement")
 
     sla_doc.service_level = "Default"
@@ -214,6 +215,7 @@ def update_agent_role_permissions():
         add_permission("File", "Agent", 0)
         add_permission("Contact", "Agent", 0)
         add_permission("Email Account", "Agent", 0)
+        add_permission("Communication", "Agent", 0)
 
 
 def add_default_assignment_rule():

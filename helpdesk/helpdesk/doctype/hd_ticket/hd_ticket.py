@@ -32,90 +32,6 @@ from ..hd_service_level_agreement.utils import get_sla
 
 
 class HDTicket(Document):
-    @staticmethod
-    def get_list_filters(query: Query):
-        _is_agent = is_agent()
-        QBTeam = frappe.qb.DocType("HD Team")
-        QBTeamMember = frappe.qb.DocType("HD Team Member")
-        QBTicket = frappe.qb.DocType("HD Ticket")
-        user = frappe.session.user
-        conditions = (
-            [
-                QBTicket.contact == user,
-                QBTicket.raised_by == user,
-            ]
-            if not _is_agent
-            else []
-        )
-
-        if not _is_agent:
-            customer = get_customer(user)
-            for c in customer:
-                conditions.append(QBTicket.customer == c)
-        query = query.where(Criterion.any(conditions))
-
-        enable_restrictions, ignore_restrictions = frappe.get_value(
-            doctype="HD Settings",
-            fieldname=[
-                "restrict_tickets_by_agent_group",
-                "do_not_restrict_tickets_without_an_agent_group",
-            ],
-        )
-        enable_restrictions = bool(int(enable_restrictions))
-        ignore_restrictions = bool(int(ignore_restrictions))
-
-        if not enable_restrictions:
-            return query
-
-        teams = (
-            frappe.qb.from_(QBTeamMember)
-            .where(QBTeamMember.user == user)
-            .join(QBTeam)
-            .on(QBTeam.name == QBTeamMember.parent)
-            .select(QBTeam.team_name, QBTeam.ignore_restrictions)
-            .run(as_dict=True)
-        )
-
-        can_ignore_restrictions = (
-            len(list(filter(lambda x: x.ignore_restrictions, teams))) > 0
-        )
-
-        if can_ignore_restrictions:
-            return query
-
-        conditions = [QBTicket.agent_group == team.team_name for team in teams]
-
-        # Consider tickets without any assigned agent group
-        if ignore_restrictions:
-            conditions.append(QBTicket.agent_group.isnull())
-
-        query = query.where(Criterion.any(conditions))
-        return query
-
-    @staticmethod
-    @lru_cache
-    def sort_options():
-        def by_priority(query: Query, direction: Order):
-            QBTicket = frappe.qb.DocType("HD Ticket")
-            QBPriority = frappe.qb.DocType("HD Ticket Priority")
-
-            query = (
-                query.left_join(QBPriority)
-                .on(QBPriority.name == QBTicket.priority)
-                .orderby(QBPriority.integer_value, order=direction)
-                .orderby(QBTicket.resolution_by, order=Order.desc)
-            )
-
-            return query
-
-        return {
-            "Due date": ("resolution_by", Order.asc),
-            "Created on": ("creation", Order.asc),
-            "High to low priority": lambda q: by_priority(q, Order.asc),
-            "Low to high priority": lambda q: by_priority(q, Order.desc),
-            "Last modified on": "modified",
-        }
-
     def publish_update(self):
         publish_event("helpdesk:ticket-update", self.name)
         capture_event("ticket_updated")
@@ -683,7 +599,9 @@ class HDTicket(Document):
         self.agent_group = escalation_rule.to_team or self.agent_group
         self.priority = escalation_rule.to_priority or self.priority
         self.ticket_type = escalation_rule.to_ticket_type or self.ticket_type
-        self.assign_agent(escalation_rule.to_agent)
+
+        if escalation_rule.to_agent:
+            self.assign_agent(escalation_rule.to_agent)
 
     def set_sla(self):
         """
@@ -753,6 +671,31 @@ class HDTicket(Document):
                 "width": "8rem",
             },
             {
+                "label": "First response",
+                "type": "Datetime",
+                "key": "response_by",
+                "width": "8rem",
+            },
+            {
+                "label": "Resolution",
+                "type": "Datetime",
+                "key": "resolution_by",
+                "width": "8rem",
+            },
+            {
+                "label": "Assigned To",
+                "type": "MultipleAvatar",
+                "key": "_assign",
+                "width": "8rem",
+            },
+            {
+                "label": "Customer",
+                "type": "Link",
+                "key": "customer",
+                "options": "HD Customer",
+                "width": "8rem",
+            },
+            {
                 "label": "Priority",
                 "type": "Link",
                 "options": "HD Ticket Priority",
@@ -781,43 +724,10 @@ class HDTicket(Document):
                 "width": "8rem",
             },
             {
-                "label": "Agreement status",
-                "fieldtype": "Select",
-                "key": "agreement_status",
-                "options": "\nFirst Response Due\nResolution Due\nFailed\nFulfilled\nPaused",
+                "label": "Rating",
+                "type": "Rating",
+                "key": "feedback_rating",
                 "width": "10rem",
-            },
-            {
-                "label": "First response",
-                "type": "Datetime",
-                "key": "response_by",
-                "width": "8rem",
-            },
-            {
-                "label": "Resolution",
-                "type": "Datetime",
-                "key": "resolution_by",
-                "width": "8rem",
-            },
-            {
-                "label": "Customer",
-                "type": "Link",
-                "key": "customer",
-                "options": "HD Customer",
-                "width": "8rem",
-            },
-            {
-                "label": "Assigned To",
-                "type": "Text",
-                "key": "_assign",
-                "width": "10rem",
-            },
-            {
-                "label": "Last modified",
-                "type": "Datetime",
-                "key": "modified",
-                "options": "Contact",
-                "width": "8rem",
             },
             {
                 "label": "Created",
@@ -872,12 +782,6 @@ class HDTicket(Document):
                 "key": "agent_group",
                 "width": "10rem",
             },
-            # {
-            #     "label": "Assigned To",
-            #     "type": "Text",
-            #     "key": "_assign",
-            #     "width": "10rem",
-            # },
             {
                 "label": "Created",
                 "type": "Datetime",
@@ -910,6 +814,13 @@ class HDTicket(Document):
             else columns,
             "rows": rows,
         }
+
+    @staticmethod
+    def filter_standard_fields(fields):
+        for f in fields:
+            if f["name"] in customer_not_allowed_fields:
+                fields.remove(f)
+        return fields
 
 
 # Check if `user` has access to this specific ticket (`doc`). This implements extra
@@ -960,3 +871,36 @@ def remove_guest_ticket_creation_permission():
     role = "Guest"
     permlevel = 0
     remove(doctype, role, permlevel, 1)
+
+
+customer_not_allowed_fields = ["customer"]
+
+
+def close_tickets_after_n_days():
+    if frappe.db.get_single_value("HD Settings", "auto_close_tickets") == 0:
+        return
+
+    days_threshold = frappe.db.get_single_value("HD Settings", "auto_close_after_days")
+
+    tickets_to_close = (
+        frappe.db.sql(
+            """ 
+                SELECT t.name 
+                FROM `tabHD Ticket` t
+                INNER JOIN `tabCommunication` c ON t.name = c.reference_name
+                WHERE t.status = 'Replied'
+                AND c.communication_date < DATE_SUB(NOW(), INTERVAL %(days_threshold)s DAY)
+            """,
+            {"days_threshold": days_threshold},
+            pluck="t.name",
+        )
+        or []
+    )
+
+    # cant do set_value because SLA will not be applied as setting directly to db and doc is not running.
+    for ticket in tickets_to_close:
+        doc = frappe.get_doc("HD Ticket", ticket)
+        doc.status = "Closed"
+        doc.flags.ignore_validate = True
+        doc.save(ignore_permissions=True)
+        doc.flags.ignore_validate = False
