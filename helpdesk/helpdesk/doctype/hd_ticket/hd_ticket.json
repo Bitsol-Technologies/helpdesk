@@ -400,16 +400,17 @@
   {
    "fieldname": "expected_due_date",
    "fieldtype": "Date",
-   "label": "Expected Due Date"
+   "label": "Expected Due Date (YYYY-MM-DD)",
+   "placeholder": "YYYY-MM-DD eg: 2025-03-27"
   },
   {
    "fieldname": "priority",
    "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Priority",
    "options": "HD Ticket Priority",
-   "reqd": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1
+   "reqd": 1
   },
   {
    "fieldname": "column_break_cmib",
@@ -424,10 +425,11 @@
    "label": "To"
   }
  ],
+ "grid_page_length": 50,
  "icon": "fa fa-issue",
  "idx": 61,
  "links": [],
- "modified": "2024-10-22 16:39:02.889164",
+ "modified": "2025-05-09 12:12:03.699513",
  "modified_by": "Administrator",
  "module": "Helpdesk",
  "name": "HD Ticket",
@@ -483,6 +485,7 @@
   }
  ],
  "quick_entry": 1,
+ "row_format": "Dynamic",
  "search_fields": "status,subject,raised_by",
  "sender_field": "raised_by",
  "sort_field": "modified",
