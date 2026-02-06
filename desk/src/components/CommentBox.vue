@@ -3,7 +3,7 @@
     <div class="mb-1 ml-0.5 flex items-center justify-between">
       <div class="text-gray-600 flex items-center gap-2">
         <Avatar
-          size="sm"
+          size="md"
           :label="commenter"
           :image="getUser(commentedBy).user_image"
         />
@@ -25,11 +25,13 @@
         </Tooltip>
         <div v-if="authStore.userId === commentedBy && !editable">
           <Dropdown
+            :placement="'right'"
             :options="[
               {
                 label: 'Edit',
                 onClick: () => handleEditMode(),
                 icon: 'edit-2',
+                condition: () => !isTicketMergedComment,
               },
               {
                 label: 'Delete',
@@ -47,13 +49,20 @@
         </div>
       </div>
     </div>
-    <div class="rounded bg-gray-50 px-4 py-3">
+    <div
+      :id="`comment-${name}`"
+      class="rounded bg-gray-50 transition-colors px-4 py-3"
+    >
       <TextEditor
         ref="editorRef"
-        :editor-class="'prose-f shrink  text-p-sm transition-all duration-300 ease-in-out block w-full content'"
+        :editor-class="[
+          'prose-f shrink text-p-sm transition-all duration-300 ease-in-out block w-full content',
+          getFontFamily(_content),
+        ]"
         :content="_content"
         :editable="editable"
         :bubble-menu="textEditorMenuButtons"
+        :mentions="[]"
         @change="(event:string) => {_content = event}"
       >
         <template #bottom v-if="editable">
@@ -91,27 +100,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, PropType, onMounted } from "vue";
-import {
-  Dropdown,
-  createResource,
-  Dialog,
-  Avatar,
-  TextEditor,
-} from "frappe-ui";
-import {
-  dateFormat,
-  timeAgo,
-  dateTooltipFormat,
-  createToast,
-  textEditorMenuButtons,
-  isContentEmpty,
-} from "@/utils";
 import { AttachmentItem } from "@/components";
 import { useAuthStore } from "@/stores/auth";
+import { updateRes as updateComment } from "@/stores/knowledgeBase";
 import { useUserStore } from "@/stores/user";
 import { CommentActivity } from "@/types";
-import { updateRes as updateComment } from "@/stores/knowledgeBase";
+import {
+  dateFormat,
+  dateTooltipFormat,
+  getFontFamily,
+  isContentEmpty,
+  textEditorMenuButtons,
+  timeAgo,
+} from "@/utils";
+import {
+  Avatar,
+  Dialog,
+  Dropdown,
+  TextEditor,
+  createResource,
+  toast,
+} from "frappe-ui";
+import { PropType, computed, onMounted, ref } from "vue";
 const authStore = useAuthStore();
 const props = defineProps({
   activity: {
@@ -123,6 +133,11 @@ const { getUser } = useUserStore();
 
 const { name, creation, content, commenter, commentedBy, attachments } =
   props.activity;
+
+const isTicketMergedComment = computed(() => {
+  const regex = /has been merged with ticket #\d+/;
+  return regex.test(content);
+});
 
 const emit = defineEmits(["update"]);
 const showDialog = ref(false);
@@ -151,11 +166,8 @@ const deleteComment = createResource({
   }),
   onSuccess() {
     emit("update");
-    createToast({
-      title: "Comment deleted",
-      icon: "check",
-      iconClasses: "text-green-500",
-    });
+    showDialog.value = false;
+    toast.success("Comment deleted");
   },
 });
 
@@ -165,11 +177,7 @@ function handleSaveComment() {
     return;
   }
   if (isContentEmpty(_content.value)) {
-    createToast({
-      title: "Comment cannot be empty",
-      icon: "x",
-      iconClasses: "text-red-600",
-    });
+    toast.error("Comment cannot be empty");
     return;
   }
 
@@ -184,11 +192,7 @@ function handleSaveComment() {
       onSuccess: () => {
         editable.value = false;
         emit("update");
-        createToast({
-          title: "Comment updated",
-          icon: "check",
-          iconClasses: "text-green-500",
-        });
+        toast.success("Comment updated");
       },
     }
   );

@@ -1,14 +1,14 @@
 # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 # License: GNU General Public License v3. See license.txt
 
-import unittest
 from datetime import timedelta
 
 import frappe
+from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
 
-class TestHDServiceHolidayList(unittest.TestCase):
+class TestHDServiceHolidayList(FrappeTestCase):
     def test_hd_service_holiday_list(self):
         today_date = getdate()
         test_holiday_dates = [
