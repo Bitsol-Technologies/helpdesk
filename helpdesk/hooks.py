@@ -6,7 +6,8 @@ app_icon = "octicon octicon-file-directory"
 app_color = "grey"
 app_email = "hello@frappe.io"
 app_license = "AGPLv3"
-required_apps = ["frappe/telephony"]
+required_apps = ["telephony"]
+require_type_annotated_api_methods = True
 
 add_to_apps_screen = [
     {
@@ -17,6 +18,8 @@ add_to_apps_screen = [
         "has_permission": "helpdesk.api.permission.has_app_permission",
     }
 ]
+
+get_site_info = "helpdesk.activation.get_site_info"
 
 after_install = "helpdesk.setup.install.after_install"
 after_migrate = [
@@ -37,6 +40,9 @@ scheduler_events = {
     "daily": [
         "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.close_tickets_after_n_days"
     ],
+    "hourly_long": [
+        "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.update_sla_status_in_ticket"
+    ],
 }
 
 
@@ -49,37 +55,93 @@ website_route_rules = [
 
 user_invitation = {
     "allowed_roles": {
-        "Agent Manager": ["Agent", "Agent Manager"],
-        "System Manager": ["Agent", "Agent Manager", "System Manager"],
+        "Agent Manager": [
+            "Agent",
+            "Agent Manager",
+            "HD Customer",
+            "HD Customer Manager",
+        ],
+        "System Manager": [
+            "Agent",
+            "Agent Manager",
+            "System Manager",
+            "HD Customer",
+            "HD Customer Manager",
+        ],
     },
     "after_accept": "helpdesk.helpdesk.hooks.user_invitation.after_accept",
+    "extra_invite_params": ["customer", "contact"],
 }
 
 doc_events = {
-    "Contact": {
-        "before_insert": "helpdesk.overrides.contact.before_insert",
-    },
     "Assignment Rule": {
         "on_trash": "helpdesk.extends.assignment_rule.on_assignment_rule_trash",
         "validate": "helpdesk.extends.assignment_rule.on_assignment_rule_validate",
     },
+    "Customer": {
+        "after_insert": "helpdesk.integrations.erpnext.customer.after_insert",
+        "on_update": "helpdesk.integrations.erpnext.customer.on_update",
+        "before_rename": "helpdesk.integrations.erpnext.customer.before_rename",
+        "after_rename": "helpdesk.integrations.erpnext.customer.after_rename",
+        "on_trash": "helpdesk.integrations.erpnext.customer.on_trash",
+    },
+    "User Permission": {
+        "before_validate": "helpdesk.integrations.erpnext.user_permission.before_validate",
+        "after_insert": "helpdesk.integrations.erpnext.user_permission.after_insert",
+        "on_update": "helpdesk.integrations.erpnext.user_permission.on_update",
+        "on_trash": "helpdesk.integrations.erpnext.user_permission.on_trash",
+    },
+    "DocShare": {
+        "before_validate": "helpdesk.integrations.erpnext.doc_share.before_validate",
+        "after_insert": "helpdesk.integrations.erpnext.doc_share.after_insert",
+        "on_update": "helpdesk.integrations.erpnext.doc_share.on_update",
+        "on_trash": "helpdesk.integrations.erpnext.doc_share.on_trash",
+    },
+    "Notification Log": {
+        "before_insert": "helpdesk.extends.notification_log.before_insert",
+    },
+    "Comment": {
+        "before_insert": "helpdesk.extends.comment.before_insert",
+        "validate": "helpdesk.extends.comment.validate",
+        "on_trash": "helpdesk.extends.comment.on_trash",
+    },
 }
 
-has_permission = {
-    "HD Ticket": "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.has_permission",
-    "HD Saved Reply": "helpdesk.helpdesk.doctype.hd_saved_reply.hd_saved_reply.has_permission",
-}
-
+# For List View
 permission_query_conditions = {
     "HD Ticket": "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.permission_query",
     "HD Saved Reply": "helpdesk.helpdesk.doctype.hd_saved_reply.hd_saved_reply.permission_query",
+    "HD Customer": "helpdesk.helpdesk.doctype.hd_customer.hd_customer.permission_query",
 }
+
+
+has_permission = {
+    "HD Agent": "helpdesk.helpdesk.doctype.hd_agent.hd_agent.has_permission",
+    "HD Ticket": "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.has_permission",
+    "HD Saved Reply": "helpdesk.helpdesk.doctype.hd_saved_reply.hd_saved_reply.has_permission",
+    "HD Customer": "helpdesk.helpdesk.doctype.hd_customer.hd_customer.has_permission",
+    "Comment": "helpdesk.extends.comment.has_permission",
+}
+
+override_whitelisted_methods = {
+    "frappe.realtime.has_permission": "helpdesk.overrides.realtime.has_permission",
+    "frappe.realtime.can_subscribe_doc": "helpdesk.overrides.realtime.can_subscribe_doc",
+}
+
+
+notification_skip_email_types = [
+    "Reaction",
+    "Ticket Reopened",
+]
+
 
 # DocType Class
 # ---------------
 # Override standard doctype classes
 override_doctype_class = {
     "Email Account": "helpdesk.overrides.email_account.CustomEmailAccount",
+    "Assignment Rule": "helpdesk.overrides.assignment_rule.HelpdeskAssignmentRule",
+    "User Invitation": "helpdesk.overrides.user_invitation.HelpdeskUserInvitation",
 }
 
 ignore_links_on_delete = [

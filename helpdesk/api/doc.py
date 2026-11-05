@@ -3,34 +3,38 @@ from frappe import _
 from frappe.desk.form.assign_to import set_status
 from frappe.model import no_value_fields
 from frappe.model.document import get_controller
-from frappe.utils.caching import redis_cache
+from frappe.query_builder.functions import Date
 from pypika import Criterion
 
 from helpdesk.api.dashboard import COUNT_NAME
 from helpdesk.utils import (
+    agent_only,
     call_log_default_columns,
     check_permissions,
     contact_default_columns,
+    contact_default_rows,
     parse_call_logs,
     is_agent
 )
+
+SLA_ROW_FIELDS = ["sla", "status", "first_responded_on", "resolution_date"]
 
 
 @frappe.whitelist()
 def get_list_data(
     doctype: str,
     # flake8: noqa
-    filters={},
-    default_filters={},
+    filters: dict | list = {},
+    default_filters: dict = {},
     order_by: str = "modified desc",
     start: int = 0,
-    page_length=20,
-    columns=None,
-    rows=None,
-    show_customer_portal_fields=False,
-    view=None,
-    is_default=False,
-):
+    page_length: int = 20,
+    columns: list = [],
+    rows: list = [],
+    show_customer_portal_fields: bool = False,
+    view: dict | None = None,
+    is_default: bool = False,
+) -> dict:
     is_custom = False
 
     rows = frappe.parse_json(rows or "[]")
@@ -43,20 +47,13 @@ def get_list_data(
     group_by_field = view.get("group_by_field") if view else None
     label_doc = view.get("label_doc") if view else None
     label_field = view.get("label_field") if view else None
-    # if user is not admin then filter will be applied
+    # Bitsol: when no filters are passed, restrict agents (non-Administrator) to their teams' tickets
     current_user = frappe.session.user
-    if current_user != "Administrator":
-        teams = frappe.get_all('HD Team Member',
-                            filters={'user': current_user},
-                            fields=['parent'])
-
-        # Extract the list of team names
-        team_names = [team['parent'] for team in teams]
-        if not filters and is_agent(current_user):
-            filters = {
-                "agent_group": ["in", team_names]
-            }
-    handle_at_me_support(filters)
+    team_names = None
+    if current_user != "Administrator" and not filters and is_agent(current_user):
+        team_names = frappe.get_all(
+            "HD Team Member", filters={"user": current_user}, pluck="parent"
+        )
 
     _list = get_controller(doctype)
     default_rows = []
@@ -89,6 +86,7 @@ def get_list_data(
         if not default_view:
             if doctype == "Contact":
                 columns = contact_default_columns
+                rows = contact_default_rows
             elif doctype == "TP Call Log":
                 columns = call_log_default_columns
             elif hasattr(_list, "default_list_data"):
@@ -103,7 +101,21 @@ def get_list_data(
                 doctype, _list, show_customer_portal_fields
             )
             if default_filters and not filters:
-                filters.append(default_filters)
+                default_filters = frappe.parse_json(default_filters)
+                for key, value in (default_filters or {}).items():
+                    if isinstance(value, list):
+                        filters.append([key, value[0], value[1]])
+                    else:
+                        filters.append([key, "=", value])
+
+    if team_names is not None:
+        if isinstance(filters, dict):
+            filters["agent_group"] = ["in", team_names]
+        else:
+            filters.append(["agent_group", "in", team_names])
+
+    handle_at_me_support(filters)
+    handle_assigned_on_filter(filters, doctype)
 
     if rows is None:
         rows = []
@@ -117,6 +129,11 @@ def get_list_data(
         rows.append(group_by_field)
 
     rows.append("name") if "name" not in rows else rows
+    if doctype == "HD Ticket":
+        rows.append("_seen") if "_seen" not in rows else rows
+        # the SLA columns can't tell fulfilled from due without these, and no saved view lists them
+        for field in SLA_ROW_FIELDS:
+            rows.append(field) if field not in rows else rows
     data = (
         frappe.get_list(
             doctype,
@@ -244,9 +261,10 @@ def get_list_data(
 
 
 @frappe.whitelist()
-@redis_cache()
 def get_filterable_fields(
-    doctype: str, show_customer_portal_fields=False, ignore_team_restrictions=False
+    doctype: str,
+    show_customer_portal_fields: bool = False,
+    ignore_team_restrictions: bool = False,
 ):
     check_permissions(doctype, None)
     QBDocField = frappe.qb.DocType("DocField")
@@ -277,6 +295,7 @@ def get_filterable_fields(
         "response_by",
         "resolution_by",
         "creation",
+        "customer",
     ]
 
     from_doc_fields = (
@@ -285,7 +304,6 @@ def get_filterable_fields(
             QBDocField.fieldname,
             QBDocField.fieldtype,
             QBDocField.label,
-            QBDocField.name,
             QBDocField.options,
         )
         .where(QBDocField.parent == doctype)
@@ -299,7 +317,6 @@ def get_filterable_fields(
             QBCustomField.fieldname,
             QBCustomField.fieldtype,
             QBCustomField.label,
-            QBCustomField.name,
             QBCustomField.options,
         )
         .where(QBCustomField.dt == doctype)
@@ -339,8 +356,15 @@ def get_filterable_fields(
                 "fieldname": "_assign",
                 "fieldtype": "Link",
                 "label": "Assigned to",
-                "name": "_assign",
                 "options": "HD Agent",
+            }
+        )
+        res.append(
+            {
+                "fieldname": "_user_tags",
+                "fieldtype": "Link",
+                "label": "Tags",
+                "options": "Tag",
             }
         )
 
@@ -367,6 +391,11 @@ def get_filterable_fields(
         },
         {"fieldname": "creation", "fieldtype": "Datetime", "label": "Created On"},
         {"fieldname": "modified", "fieldtype": "Datetime", "label": "Last Updated On"},
+        {
+            "fieldname": "__assigned_on",
+            "fieldtype": "Date",
+            "label": "Assigned on",
+        },
     ]
     for field in standard_fields:
         if field.get("fieldname") not in [r.get("fieldname") for r in res]:
@@ -375,7 +404,7 @@ def get_filterable_fields(
 
 
 @frappe.whitelist()
-def sort_options(doctype: str, show_customer_portal_fields=False):
+def sort_options(doctype: str, show_customer_portal_fields: bool = False):
     fields = frappe.get_meta(doctype).fields
     fields = [field for field in fields if field.fieldtype not in no_value_fields]
     fields = [
@@ -404,7 +433,7 @@ def sort_options(doctype: str, show_customer_portal_fields=False):
 
 
 @frappe.whitelist()
-def get_quick_filters(doctype: str, show_customer_portal_fields=False):
+def get_quick_filters(doctype: str, show_customer_portal_fields: bool = False):
     meta = frappe.get_meta(doctype)
     fields = [field for field in meta.fields if field.in_standard_filter]
     quick_filters = []
@@ -465,10 +494,10 @@ def get_customer_portal_fields(doctype, fields):
     return fields
 
 
-def get_visible_custom_fields():
+def get_visible_custom_fields() -> list[str]:
     return frappe.db.get_all(
         "HD Ticket Template Field",
-        {"parent": "Default", "hide_from_customer": 0},
+        {"parent": "Default", "visible_to": "Everyone"},
         pluck="fieldname",
     )
 
@@ -500,7 +529,7 @@ def handle_default_view(doctype, _list, show_customer_portal_fields):
     if not columns:
         if doctype == "Contact":
             columns = contact_default_columns
-            rows = ["name", "email_id", "creation"]
+            rows = ["name", "email_id", "mobile_no", "image", "creation"]
         elif doctype == "TP Call Log":
             columns = call_log_default_columns
             rows = ["name", "caller", "receiver", "creation"]
@@ -518,23 +547,144 @@ def handle_default_view(doctype, _list, show_customer_portal_fields):
 
 def handle_at_me_support(filters):
     # Converts @me in filters to current user
-    for key in filters:
-        value = filters[key]
-        if isinstance(value, list):
-            if "@me" in value:
-                value[value.index("@me")] = frappe.session.user
-            elif "%@me%" in value:
-                index = [i for i, v in enumerate(value) if v == "%@me%"]
-                for i in index:
-                    value[i] = "%" + frappe.session.user + "%"
-        elif value == "@me":
-            filters[key] = frappe.session.user
-
+    if isinstance(filters, dict):
+        for key in filters:
+            _replace_at_me(filters, key)
+        return filters
+    for condition in filters:
+        if isinstance(condition, list) and condition:
+            _replace_at_me(condition, len(condition) - 1)
     return filters
 
 
+def _replace_at_me(container, key):
+    value = container[key]
+    if isinstance(value, list):
+        for index in range(len(value)):
+            _replace_at_me(value, index)
+    elif value == "@me":
+        container[key] = frappe.session.user
+    elif value == "%@me%":
+        container[key] = "%" + frappe.session.user + "%"
+
+
+def handle_assigned_on_filter(filters, doctype):
+    """
+    Handle the custom __assigned_on filter by querying ToDo table
+    and merging the matching ticket names into the filters in place.
+    """
+    assigned_on_filter = _pop_assigned_on_filter(filters)
+    if assigned_on_filter is None:
+        return
+
+    # Build ToDo query based on the operator and value
+    ToDo = frappe.qb.DocType("ToDo")
+    query = (
+        frappe.qb.from_(ToDo)
+        .select(ToDo.reference_name)
+        .distinct()
+        .where(ToDo.reference_type == doctype)
+        .where(ToDo.allocated_to == frappe.session.user)
+        .where(ToDo.status == "Open")
+    )
+
+    # "Assigned on" is a Date filter, so compare whole days
+    query = apply_datetime_filter(query, Date(ToDo.creation), assigned_on_filter)
+
+    ticket_names = [row[0] for row in query.run()]
+    # No matching tickets results in an impossible filter
+    _merge_name_filter(filters, ticket_names)
+
+
+def _pop_assigned_on_filter(filters):
+    if isinstance(filters, dict):
+        if "__assigned_on" not in filters:
+            return None
+        return filters.pop("__assigned_on")
+    condition = next(
+        (
+            condition
+            for condition in filters
+            if isinstance(condition, list)
+            and condition
+            and condition[0] == "__assigned_on"
+        ),
+        None,
+    )
+    if condition is None:
+        return None
+    filters.remove(condition)
+    return [condition[1], condition[2]] if len(condition) >= 3 else None
+
+
+def _merge_name_filter(filters, ticket_names):
+    if isinstance(filters, dict):
+        if ticket_names and "name" in filters:
+            existing_filter = filters["name"]
+            if isinstance(existing_filter, list) and existing_filter[0] == "in":
+                # Intersection of both filters
+                ticket_names = list(set(ticket_names) & set(existing_filter[1]))
+        filters["name"] = ["in", ticket_names]
+        return
+    existing = next(
+        (
+            condition
+            for condition in filters
+            if isinstance(condition, list)
+            and len(condition) >= 3
+            and condition[0] == "name"
+            and str(condition[1]).lower() == "in"
+        ),
+        None,
+    )
+    if existing:
+        existing[2] = list(set(ticket_names) & set(existing[2]))
+    else:
+        filters.append(["name", "in", ticket_names])
+
+
+def apply_datetime_filter(query, field, filter_value):
+    """Apply datetime filter to query based on operator."""
+    if isinstance(filter_value, list):
+        operator, value = filter_value[0], filter_value[1]
+    else:
+        operator, value = "=", filter_value
+
+    if operator == "=":
+        query = query.where(field == value)
+    elif operator == "!=":
+        query = query.where(field != value)
+    elif operator == ">":
+        query = query.where(field > value)
+    elif operator == "<":
+        query = query.where(field < value)
+    elif operator == ">=":
+        query = query.where(field >= value)
+    elif operator == "<=":
+        query = query.where(field <= value)
+    elif operator == "between":
+        if isinstance(value, list) and len(value) == 2:
+            query = query.where(field >= value[0]).where(field <= value[1])
+    elif operator == "timespan":
+        from frappe.utils import get_datetime, get_timespan_date_range
+
+        start, end = get_timespan_date_range(value)
+        # convert to datetime to include full start and end day
+        start_dt = get_datetime(str(start)).replace(hour=0, minute=0, second=0)
+        end_dt = get_datetime(str(end)).replace(hour=23, minute=59, second=59)
+        query = query.where(field >= start_dt).where(field <= end_dt)
+    elif operator == "is":
+        if value == "set":
+            query = query.where(field.isnotnull())
+        else:
+            query = query.where(field.isnull())
+
+    return query
+
+
 @frappe.whitelist()
-def remove_assignments(doctype, name, assignees, ignore_permissions=False):
+@agent_only
+def remove_assignments(doctype: str, name: str, assignees: list[str]):
     assignees = frappe.parse_json(assignees)
 
     if not assignees:
@@ -547,5 +697,4 @@ def remove_assignments(doctype, name, assignees, ignore_permissions=False):
             todo=None,
             assign_to=assign_to,
             status="Cancelled",
-            ignore_permissions=ignore_permissions,
         )

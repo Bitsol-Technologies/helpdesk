@@ -5,7 +5,6 @@ export const fieldDependenciesList = createListResource({
   doctype: "HD Form Script",
   filters: { is_standard: 1, name: ["like", "%Field Dependency%"] },
   fields: ["name", "enabled", "owner"],
-  auto: true,
   cache: ["FD", "List"],
   orderBy: "modified desc",
   start: 0,
@@ -25,6 +24,10 @@ export const hiddenChildFields = computed(() => {
 });
 
 const optionsMap = reactive({});
+
+export function clearFieldOptionsCache(): void {
+  Object.keys(optionsMap).forEach((key) => delete optionsMap[key]);
+}
 
 export async function getFieldOptions(field: any): Promise<string[]> {
   if (optionsMap[field.value]) {

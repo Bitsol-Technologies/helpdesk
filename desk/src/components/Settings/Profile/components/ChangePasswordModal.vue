@@ -1,6 +1,6 @@
 <template>
-  <Dialog v-model="show" :options="{ title: __('Change Password') }">
-    <template #body-content>
+  <Dialog v-model:open="show" :title="__('Change Password')">
+    <template #default>
       <div class="flex flex-col gap-4">
         <div>
           <Password
@@ -34,8 +34,8 @@
             class="text-sm text-ink-gray-5"
             :class="
               confirmPasswordMessage === __('Passwords match')
-                ? 'text-ink-green-3'
-                : 'text-ink-red-3'
+                ? 'text-ink-green-6'
+                : 'text-ink-red-6'
             "
           >
             {{ confirmPasswordMessage }}
@@ -60,7 +60,7 @@
 </template>
 <script setup lang="ts">
 import LockKeyhole from "~icons/lucide/lock-keyhole";
-import { Dialog, toast, createResource } from "frappe-ui";
+import { createResource, Dialog, Password, toast } from "frappe-ui";
 import { ref, watch } from "vue";
 import { __ } from "@/translation";
 import { useAuthStore } from "@/stores/auth";
@@ -84,7 +84,7 @@ const updatePassword = createResource({
     };
   },
   onSuccess: () => {
-    toast.success(__("Password updated successfully"));
+    toast.success(__("Password updated successfully."));
     show.value = false;
     newPassword.value = "";
     confirmPassword.value = "";

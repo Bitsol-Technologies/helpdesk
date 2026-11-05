@@ -19,12 +19,18 @@ declare module "vue-router" {
   }
 }
 
-const routes = [
+// Pages that render inside the portal chrome; PortalRoot picks the agent or
+// customer shell from the session.
+const portalRoutes = [
   // Agent Portal Routes
   {
-    path: "/",
+    path: "",
+    redirect: "/home",
+  },
+  {
+    path: "/home",
     name: "Home",
-    redirect: "/tickets",
+    component: () => import("@/pages/home/Home.vue"),
   },
 
   {
@@ -80,12 +86,24 @@ const routes = [
   {
     path: "/customers",
     name: "CustomerList",
-    component: () => import("@/pages/desk/customer/Customers.vue"),
+    component: () => import("@/pages/customer/Customers.vue"),
+  },
+  {
+    path: "/customers/:id",
+    name: "Customer",
+    component: () => import("@/pages/customer/Customer.vue"),
+    props: true,
   },
   {
     path: "/contacts",
     name: "ContactList",
-    component: () => import("@/pages/desk/contact/Contacts.vue"),
+    component: () => import("@/pages/contact/Contacts.vue"),
+  },
+  {
+    path: "/contacts/:id",
+    name: "Contact",
+    component: () => import("@/pages/contact/Contact.vue"),
+    props: true,
   },
   {
     path: "/agents",
@@ -183,7 +201,15 @@ const routes = [
   },
 ];
 
-const handleMobileView = (componentName) => {
+const routes = [
+  {
+    path: "/",
+    component: () => import("@/roots/PortalRoot.vue"),
+    children: portalRoutes,
+  },
+];
+
+const handleMobileView = (componentName: string) => {
   return isMobileView.value ? `Mobile${componentName}` : componentName;
 };
 
@@ -205,14 +231,14 @@ router.beforeEach(async (to, _, next) => {
     window.location.href =
       LOGIN_PAGE +
       (redirectURL ? `?redirect-to=/helpdesk${redirectURL}` : "/helpdesk");
-  } else if (!to.meta.public && !authStore.hasDeskAccess) {
-    next({ name: "TicketsCustomer" });
   } else if (to.name === "TicketAgent" && !authStore.isAgent) {
     const ticketId = to.params.ticketId;
     next({
       name: "TicketCustomer",
       params: { ticketId },
     });
+  } else if (!to.meta.public && !authStore.hasDeskAccess) {
+    next({ name: "TicketsCustomer" });
   } else {
     next();
   }

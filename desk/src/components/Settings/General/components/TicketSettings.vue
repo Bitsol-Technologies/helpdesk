@@ -1,12 +1,12 @@
 <template>
   <div>
-    <div class="text-base font-semibold text-gray-900">
-      {{ __("Ticket settings") }}
+    <div class="text-base-semibold text-ink-gray-9">
+      {{ __("Ticket Settings") }}
     </div>
     <div class="mt-6 flex flex-col gap-6">
       <div class="flex items-center justify-between">
         <div class="flex flex-col gap-1">
-          <span class="text-base font-medium text-ink-gray-8">{{
+          <span class="text-base-medium text-ink-gray-8">{{
             __("Make feedback mandatory")
           }}</span>
           <span class="text-p-sm text-ink-gray-6">{{
@@ -17,10 +17,21 @@
         </div>
         <Switch v-model="settingsData.isFeedbackMandatory" />
       </div>
+      <div class="flex items-center justify-between">
+        <div class="flex flex-col gap-1">
+          <span class="text-base-medium text-ink-gray-8">{{
+            __("Enable comment reactions")
+          }}</span>
+          <span class="text-p-sm text-ink-gray-6">{{
+            __("Allow users to react to comments with emojis.")
+          }}</span>
+        </div>
+        <Switch v-model="settingsData.enableCommentReactions" />
+      </div>
       <div>
         <div class="flex items-center justify-between">
           <div class="flex flex-col gap-1">
-            <span class="text-base font-medium text-ink-gray-8">{{
+            <span class="text-base-medium text-ink-gray-8">{{
               __("Restrict tickets by team")
             }}</span>
             <span class="text-p-sm text-ink-gray-6">{{
@@ -52,7 +63,7 @@
         v-if="settingsData.restrictTicketsByAgentGroup"
       >
         <div class="flex flex-col gap-1">
-          <span class="text-base font-medium text-ink-gray-8">{{
+          <span class="text-base-medium text-ink-gray-8">{{
             __("Disable global saved replies")
           }}</span>
           <span class="text-p-sm text-ink-gray-6">{{
@@ -65,7 +76,7 @@
       </div>
       <div class="flex items-center justify-between">
         <div class="flex flex-col gap-1">
-          <span class="text-base font-medium text-ink-gray-8">{{
+          <span class="text-base-medium text-ink-gray-8">{{
             __("Auto update status")
           }}</span>
           <span class="text-p-sm text-ink-gray-6">{{
@@ -84,7 +95,7 @@
                 settingsData.autoUpdateStatus = true;
               } else {
                 settingsData.updateStatusTo = null;
-                settingsData.autoUpdateStatus = false;
+                settingsData.autoUpdateStatus = 0;
               }
             }
           "
@@ -94,7 +105,7 @@
       </div>
       <div class="flex items-center justify-between">
         <div class="flex flex-col gap-1">
-          <span class="text-base font-medium text-ink-gray-8">{{
+          <span class="text-base-medium text-ink-gray-8">{{
             __("Allow anyone to create tickets")
           }}</span>
           <span class="text-p-sm text-ink-gray-6"
@@ -114,7 +125,7 @@
       </div>
       <div class="flex items-center justify-between">
         <div class="flex flex-col gap-1">
-          <span class="text-base font-medium text-ink-gray-8">{{
+          <span class="text-base-medium text-ink-gray-8">{{
             __("Default ticket type")
           }}</span>
           <span class="text-p-sm text-ink-gray-6">{{
@@ -122,7 +133,7 @@
           }}</span>
         </div>
         <SelectDropdown
-          :options="ticketTypeList.data"
+          :options="ticketTypeList.data || []"
           v-model="settingsData.defaultTicketType"
           target-class="max-w-40"
           placement="bottom-start"
@@ -130,7 +141,7 @@
       </div>
       <div>
         <div class="flex flex-col gap-1">
-          <span class="text-base font-medium text-ink-gray-8">{{
+          <span class="text-base-medium text-ink-gray-8">{{
             __("Automatically close stale tickets")
           }}</span>
           <span class="text-p-sm text-ink-gray-6">{{
@@ -152,7 +163,7 @@
                     settingsData.autoCloseTickets = true;
                   } else {
                     settingsData.autoCloseStatus = null;
-                    settingsData.autoCloseTickets = false;
+                    settingsData.autoCloseTickets = 0;
                   }
                 }
               "
@@ -180,6 +191,68 @@
           </div>
         </div>
       </div>
+      <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-1">
+              <span class="text-base-medium text-ink-gray-8">{{
+                __("Outside working hours notice")
+              }}</span>
+              <span class="text-p-sm text-ink-gray-6"
+                >{{
+                  __(
+                    "Display a customizable banner message when customers raise tickets outside your working hours."
+                  )
+                }}
+              </span>
+            </div>
+            <Switch
+              :model-value="settingsData.enableOutsideHoursBanner"
+              @update:model-value="handleShowBannerToggle"
+            />
+          </div>
+          <Textarea
+            v-if="settingsData.enableOutsideHoursBanner"
+            variant="subtle"
+            size="sm"
+            placeholder="Enter Notification Message"
+            :required="true"
+            v-model="settingsData.outsideWorkingHoursBannerMessage"
+          />
+        </div>
+        <div
+          v-if="settingsData.enableOutsideHoursBanner"
+          class="flex gap-x-1 items-start justify-between"
+        >
+          <p class="text-sm text-ink-gray-7 leading-5">
+            {{
+              __(
+                "Find out all of the variables that can be used in the content"
+              )
+            }}
+            <a
+              href="https://docs.frappe.io/helpdesk/helpdesk/customization/outside-working-hours-banner"
+              target="_blank"
+              class="underline font-semibold"
+              >{{ __("here") }}</a
+            >
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="subtle"
+            class="w-fit"
+            :disabled="!hasBannerMessageChanged"
+            @click="resetBannerContent"
+            :tooltip="
+              hasBannerMessageChanged &&
+              __('This will reset the content to the default message.')
+            "
+          >
+            {{ __("Reset Content") }}
+          </Button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -192,16 +265,47 @@ import { HDTicketStatus } from "@/types/doctypes";
 import {
   Checkbox,
   createListResource,
+  createResource,
   ErrorMessage,
   FormControl,
   FormLabel,
   Switch,
+  Textarea,
 } from "frappe-ui";
 import { computed, inject } from "vue";
 
 const settingsData = inject(HDSettingsSymbol);
 
 const { statuses } = useTicketStatusStore();
+
+const bannerMsg = createResource({
+  url: "helpdesk.helpdesk.doctype.hd_settings.helpers.get_banner_msg",
+  auto: true,
+});
+
+const hasBannerMessageChanged = computed(() => {
+  return (
+    settingsData.value.outsideWorkingHoursBannerMessage !==
+    bannerMsg.data?.default
+  );
+});
+
+function resetBannerContent() {
+  settingsData.value.outsideWorkingHoursBannerMessage = bannerMsg.data?.default;
+}
+
+function handleShowBannerToggle(value: boolean) {
+  // the switch is live before the message resource lands
+  if (!bannerMsg.data?.current) {
+    if (value) {
+      settingsData.value.outsideWorkingHoursBannerMessage =
+        bannerMsg.data?.default;
+    } else {
+      settingsData.value.outsideWorkingHoursBannerMessage = "";
+    }
+  }
+  settingsData.value.enableOutsideHoursBanner = value;
+}
 
 const ticketTypeList = createListResource({
   doctype: "HD Ticket Type",

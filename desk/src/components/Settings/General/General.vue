@@ -2,33 +2,31 @@
   <SettingsLayoutBase :description="__('Manage general settings of your app.')">
     <template #title>
       <div class="flex items-center gap-2">
-        <h1 class="text-lg font-semibold text-ink-gray-8">
+        <h1 class="text-md-semibold text-ink-gray-8">
           {{ __("General") }}
         </h1>
-        <Badge
-          variant="subtle"
-          theme="orange"
-          size="sm"
-          :label="__('Unsaved')"
-          v-if="isDirty || isWebsiteSettingsChanged"
-        />
+        <UnsavedBadge :show="isDirty" />
       </div>
     </template>
     <template #header-actions>
-      <Button
-        :label="__('Save')"
-        variant="solid"
-        @click="saveSettings"
-        :loading="
-          saveSettingsResource.loading || saveWebsiteSettingsResource.loading
-        "
-        :disabled="!isDirty && !isWebsiteSettingsChanged"
-      />
+      <Transition name="fade">
+        <div v-if="isDirty">
+          <Button
+            :label="__('Save')"
+            variant="solid"
+            @click="saveSettings"
+            :loading="
+              saveSettingsResource.loading ||
+              saveWebsiteSettingsResource.loading
+            "
+          />
+        </div>
+      </Transition>
     </template>
     <template #content>
       <div
         v-if="settingsDataResource.loading && !settingsDataResource.data"
-        class="flex items-center justify-center mt-12"
+        class="flex items-center justify-center absolute inset-x-0 top-5.5 bottom-0"
       >
         <LoadingIndicator class="w-4" />
       </div>
@@ -40,12 +38,12 @@
         <WorkflowKnowledgebaseSettings />
         <hr class="my-8" />
         <div>
-          <div class="text-base font-semibold text-gray-900">
-            {{ __("User signup") }}
+          <div class="text-base-semibold text-ink-gray-9">
+            {{ __("User Signup") }}
           </div>
           <div class="flex items-center justify-between mt-6">
             <div class="flex flex-col gap-1">
-              <span class="text-base font-medium text-ink-gray-8">{{
+              <span class="text-base-medium text-ink-gray-8">{{
                 __("Disable signup")
               }}</span>
               <span class="text-p-sm text-ink-gray-6">{{
@@ -63,22 +61,24 @@
 </template>
 
 <script setup lang="ts">
+import SettingsLayoutBase from "@/components/layouts/SettingsLayoutBase.vue";
+import UnsavedBadge from "@/components/UnsavedBadge.vue";
+import { useConfigStore } from "@/stores/config";
+import { __ } from "@/translation";
+import { HDSettings, HDSettingsSymbol } from "@/types";
 import {
-  Badge,
   Button,
   createResource,
   LoadingIndicator,
   Switch,
   toast,
 } from "frappe-ui";
+import { computed, provide, ref, watch } from "vue";
 import Branding from "./components/Branding.vue";
 import TicketSettings from "./components/TicketSettings.vue";
 import WorkflowKnowledgebaseSettings from "./components/WorkflowKnowledgebaseSettings.vue";
-import { computed, provide, ref, watch } from "vue";
-import { __ } from "@/translation";
-import { disableSettingModalOutsideClick } from "../settingsModal";
-import SettingsLayoutBase from "@/components/layouts/SettingsLayoutBase.vue";
-import { HDSettings, HDSettingsSymbol } from "@/types";
+
+const configStore = useConfigStore();
 
 const isDirty = ref(false);
 const initialData = ref<null | string>(null);
@@ -95,11 +95,14 @@ const settingsData = ref({
   updateStatusTo: "",
   autoUpdateStatus: false,
   isFeedbackMandatory: false,
+  enableCommentReactions: false,
   allowAnyoneToCreateTickets: false,
   defaultTicketType: "",
   preferKnowledgeBase: false,
   skipEmailWorkflow: false,
   disableSavedRepliesGlobalScope: false,
+  enableOutsideHoursBanner: false,
+  outsideWorkingHoursBannerMessage: "",
 });
 const disableSignup = ref(false);
 
@@ -144,6 +147,7 @@ const saveSettingsResource = createResource({
         update_status_to: settingsData.value.updateStatusTo,
         auto_update_status: settingsData.value.autoUpdateStatus,
         is_feedback_mandatory: settingsData.value.isFeedbackMandatory,
+        enable_comment_reactions: settingsData.value.enableCommentReactions,
         allow_anyone_to_create_tickets:
           settingsData.value.allowAnyoneToCreateTickets,
         default_ticket_type: settingsData.value.defaultTicketType,
@@ -151,12 +155,17 @@ const saveSettingsResource = createResource({
         skip_email_workflow: settingsData.value.skipEmailWorkflow,
         disable_saved_replies_global_scope:
           settingsData.value.disableSavedRepliesGlobalScope,
+        enable_outside_hours_banner:
+          settingsData.value.enableOutsideHoursBanner,
+        outside_working_hours_message:
+          settingsData.value.outsideWorkingHoursBannerMessage,
       },
     };
   },
   onSuccess(data: HDSettings) {
     settingsData.value = transformData(data);
     initialData.value = JSON.stringify(settingsData.value);
+    configStore.configResource.reload();
   },
 });
 
@@ -176,6 +185,7 @@ const transformData = (data: any) => {
     updateStatusTo: data.update_status_to,
     autoUpdateStatus: data.auto_update_status,
     isFeedbackMandatory: Boolean(data.is_feedback_mandatory),
+    enableCommentReactions: Boolean(data.enable_comment_reactions),
     allowAnyoneToCreateTickets: Boolean(data.allow_anyone_to_create_tickets),
     defaultTicketType: data.default_ticket_type,
     preferKnowledgeBase: Boolean(data.prefer_knowledge_base),
@@ -183,6 +193,8 @@ const transformData = (data: any) => {
     disableSavedRepliesGlobalScope: Boolean(
       data.disable_saved_replies_global_scope
     ),
+    enableOutsideHoursBanner: Boolean(data.enable_outside_hours_banner),
+    outsideWorkingHoursBannerMessage: data.outside_working_hours_message || "",
   };
 };
 
@@ -216,6 +228,18 @@ const saveWebsiteSettingsResource = createResource({
 });
 
 const saveSettings = async () => {
+  if (
+    settingsData.value.restrictTicketsByAgentGroup &&
+    !settingsData.value.doNotRestrictTicketsWithoutAnAgentGroup &&
+    !settingsData.value.assignWithinTeam
+  ) {
+    toast.error(
+      __(
+        "Please select at least one restriction option for teams in the settings."
+      )
+    );
+    return;
+  }
   const promises = [];
   if (isDirty.value) {
     promises.push(saveSettingsResource.submit());
@@ -228,17 +252,97 @@ const saveSettings = async () => {
   });
 };
 
+const toggleFieldnames = {
+  isFeedbackMandatory: "is_feedback_mandatory",
+  enableCommentReactions: "enable_comment_reactions",
+  disableSavedRepliesGlobalScope: "disable_saved_replies_global_scope",
+  allowAnyoneToCreateTickets: "allow_anyone_to_create_tickets",
+  preferKnowledgeBase: "prefer_knowledge_base",
+  skipEmailWorkflow: "skip_email_workflow",
+} as const;
+const toggleFields = Object.keys(toggleFieldnames) as Array<
+  keyof typeof toggleFieldnames
+>;
+
+// Toggles save on their own, so they never carry unsaved text fields along.
+const saveTogglesResource = createResource({
+  url: "frappe.client.set_value",
+  makeParams: (values: Record<string, unknown>) => ({
+    doctype: "HD Settings",
+    name: "HD Settings",
+    fieldname: Object.fromEntries(
+      toggleFields.map((f) => [toggleFieldnames[f], values[f]])
+    ),
+  }),
+});
+let pendingToggleSave = Promise.resolve();
+
+function currentToggles() {
+  return Object.fromEntries(
+    toggleFields.map((f) => [f, settingsData.value[f]])
+  );
+}
+
+async function saveToggles(sent: Record<string, unknown>) {
+  try {
+    await saveTogglesResource.submit(sent);
+    markTogglesSaved(sent);
+    toast.success(__("Settings updated"));
+  } catch {
+    revertToggles(sent);
+  }
+}
+
+function markTogglesSaved(sent: Record<string, unknown>) {
+  const initial = JSON.parse(initialData.value!);
+  toggleFields.forEach((f) => (initial[f] = sent[f]));
+  initialData.value = JSON.stringify(initial);
+  configStore.configResource.reload();
+}
+
+// Undo only what the failed request sent; a toggle changed since keeps its queued save.
+function revertToggles(sent: Record<string, unknown>) {
+  const initial = JSON.parse(initialData.value!);
+  toggleFields
+    .filter((f) => settingsData.value[f] === sent[f])
+    .forEach((f) => (settingsData.value[f] = initial[f]));
+}
+
+// Track dirty state for non-toggle fields only
 watch(
   settingsData,
   (data) => {
     if (!initialData.value) return;
-    isDirty.value = JSON.stringify(data) !== initialData.value;
-    if (isDirty.value) {
-      disableSettingModalOutsideClick.value = true;
-    } else {
-      disableSettingModalOutsideClick.value = false;
-    }
+    const initial = JSON.parse(initialData.value);
+    isDirty.value = Object.keys(data).some(
+      (key) =>
+        !(toggleFields as string[]).includes(key) &&
+        JSON.stringify(data[key as keyof typeof data]) !==
+          JSON.stringify(initial[key])
+    );
+    disableSettingModalOutsideClick.value = isDirty.value;
   },
   { deep: true }
 );
+
+// Queue toggle saves: parallel writes to the single doc fail with a 417.
+watch(
+  () => toggleFields.map((f) => settingsData.value[f]),
+  (newVals) => {
+    if (!initialData.value) return;
+    const initial = JSON.parse(initialData.value);
+    if (!newVals.some((v, i) => v !== initial[toggleFields[i]])) return;
+    pendingToggleSave = pendingToggleSave.then(() =>
+      saveToggles(currentToggles())
+    );
+  }
+);
+
+watch(disableSignup, async (newVal) => {
+  if (!websiteSettingsResource.data) return;
+  if (newVal !== Boolean(websiteSettingsResource.data.disable_signup)) {
+    await saveWebsiteSettingsResource.submit();
+    toast.success(__("Settings updated"));
+  }
+});
 </script>

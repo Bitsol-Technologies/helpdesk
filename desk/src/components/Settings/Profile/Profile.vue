@@ -4,7 +4,7 @@
     :description="__('Manage your profile information.')"
   >
     <template #content>
-      <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center justify-between gap-2 pt-1.5 pb-8">
         <FileUploader
           :fileTypes="['image/*']"
           @success="
@@ -14,132 +14,144 @@
           "
         >
           <template #default="{ openFileSelector, error: _error, uploading }">
-            <div class="flex items-center justify-center gap-2">
-              <div class="group relative !size-14">
+            <div class="flex items-center justify-center gap-4">
+              <div class="group relative flex-shrink-0 size-16">
                 <Avatar
-                  class="!size-14"
-                  :image="profile.userImage"
-                  :label="profile.fullName"
+                  class="!size-16"
+                  :image="user.doc?.user_image"
+                  :label="fullName"
                 />
-                <component
-                  :is="profile.userImage ? Dropdown : 'div'"
-                  v-bind="
-                    profile.userImage
-                      ? {
-                          options: [
-                            {
-                              icon: 'upload',
-                              label: profile.userImage
-                                ? __('Change image')
-                                : __('Upload image'),
-                              onClick: openFileSelector,
-                            },
-                            {
-                              icon: 'trash-2',
-                              label: __('Remove image'),
-                              onClick: () => updateImage(null),
-                            },
-                          ],
-                        }
-                      : { onClick: openFileSelector }
-                  "
+                <div
+                  v-if="agentStatusStore.myStatus"
+                  class="absolute -bottom-0.5 end-0 rounded-full bg-surface-elevation-2 p-1"
                 >
                   <div
-                    class="z-1 absolute top-0 left-0 flex h-9 cursor-pointer items-center justify-center rounded-full bg-black bg-opacity-40 opacity-0 duration-300 ease-in-out group-hover:opacity-100 !size-14"
+                    class="size-3.5 rounded-full"
+                    :class="
+                      agentStatusStore.statusColor(agentStatusStore.myStatus)
+                    "
+                  />
+                </div>
+                <!-- one Tooltip each: it wires only its first child -->
+                <Tooltip :hoverDelay="0" side="bottom" :text="uploadTooltip">
+                  <div
+                    class="z-1 absolute top-0 left-0 flex h-9 cursor-pointer items-center justify-center rounded-full !size-16"
+                    @click.stop="openFileSelector"
+                  />
+                </Tooltip>
+                <Tooltip
+                  v-if="user.doc?.user_image"
+                  :hoverDelay="0"
+                  side="bottom"
+                  :text="__('Remove Photo')"
+                >
+                  <div
+                    class="z-1 size-4 absolute -top-1 -right-1 flex cursor-pointer items-center justify-center rounded-full bg-surface-base opacity-0 duration-300 ease-in-out group-hover:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-surface-gray-2 outline outline-black-overlay-50"
+                    @click.stop="updateImage()"
                   >
-                    <CameraIcon class="size-4 cursor-pointer text-white" />
+                    <LucideX class="size-3.5 cursor-pointer text-ink-gray-4" />
                   </div>
-                </component>
+                </Tooltip>
                 <div
                   v-if="uploading"
-                  class="w-full h-full top-0 left-0 absolute bg-black bg-opacity-20 rounded-full flex items-center justify-center"
+                  class="w-full h-full top-0 left-0 absolute bg-surface-gray-10 bg-opacity-20 rounded-full flex items-center justify-center"
                 >
                   <LoadingIndicator class="size-4" />
                 </div>
               </div>
-              <div class="flex flex-col gap-1">
-                <div class="flex flex-col">
-                  <span
-                    class="text-lg sm:text-xl !font-semibold text-ink-gray-8"
-                    >{{ auth?.userName }}</span
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <div v-if="!editName" class="flex items-center gap-1">
+                  <span class="text-lg font-semibold text-ink-gray-9 truncate">
+                    {{ user?.doc?.full_name }}
+                  </span>
+                  <Button
+                    class="!px-1 !h-5 flex-shrink-0"
+                    variant="ghost"
+                    @click="editFullName"
                   >
-                  <span class="text-p-sm text-ink-gray-6">{{
-                    auth?.user
-                  }}</span>
+                    <EditIcon class="size-3.5" />
+                  </Button>
                 </div>
-                <ErrorMessage :message="__(_error)" />
+                <div v-else class="flex items-center gap-1">
+                  <TextInput
+                    ref="fullNameRef"
+                    v-model="fullName"
+                    @keydown.enter="isNameDirty ? save() : (editName = false)"
+                    @keydown.esc.stop="editName = false"
+                  />
+                  <Button
+                    variant="outline"
+                    icon="lucide-check"
+                    :loading="user?.save?.loading"
+                    :disabled="user?.save?.loading"
+                    @click="isNameDirty ? save() : (editName = false)"
+                  />
+                </div>
+                <span class="text-p-sm text-ink-gray-6 truncate">
+                  {{ user?.doc?.email }}
+                </span>
               </div>
             </div>
           </template>
         </FileUploader>
       </div>
-      <hr class="my-6" />
       <div>
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between h-7">
           <div class="flex gap-2 items-center">
-            <div class="text-base font-semibold text-ink-gray-9">
-              {{ __("Account info & security") }}
-            </div>
-            <Badge
-              v-if="isAccountInfoDirty || isLanguageChanged"
-              :variant="'subtle'"
-              :theme="'orange'"
-              size="sm"
-              :label="__('Unsaved')"
-            />
-          </div>
-          <Button
-            :label="__('Save')"
-            @click="onSave"
-            :loading="setAgent.loading || saveLanguageResource.loading"
-            :disabled="!isAccountInfoDirty && !isLanguageChanged"
-          />
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
-          <FormControl
-            class="w-full"
-            :label="__('First Name')"
-            maxlength="40"
-            v-model="profile.firstName"
-          />
-          <FormControl
-            class="w-full"
-            :label="__('Last Name')"
-            maxlength="40"
-            v-model="profile.lastName"
-          />
-        </div>
-        <div class="flex items-center justify-between mt-6">
-          <div class="flex flex-col gap-1">
-            <span class="text-base font-medium text-ink-gray-8">
-              {{ __("Password") }}
+            <span class="text-base-semibold text-ink-gray-9">
+              {{ __("Account Info & Security") }}
             </span>
-            <span class="text-p-sm text-ink-gray-6">{{
-              __("Change your account password for security.")
-            }}</span>
           </div>
-          <Button
-            icon-left="lock"
-            :label="__('Change Password')"
-            @click="showChangePasswordModal = true"
-          />
         </div>
-        <div class="flex items-center justify-between mt-6">
-          <div class="flex flex-col gap-1">
-            <span class="text-base font-medium text-ink-gray-8">
-              {{ __("Language") }}
-            </span>
-            <span class="text-p-sm text-ink-gray-6">{{
-              __("Change language of the application.")
-            }}</span>
-          </div>
-          <Link
-            :model-value="language"
-            @update:modelValue="language = $event || auth.language"
-            doctype="Language"
-            class="w-40"
-          />
+      </div>
+
+      <div v-if="hasAgentRecord" class="flex items-center justify-between mt-6">
+        <div class="flex flex-col gap-1">
+          <span class="text-base-medium text-ink-gray-8">
+            {{ __("Availability") }}
+          </span>
+          <span class="text-p-sm text-ink-gray-6">
+            {{
+              __(
+                "Set your availability so your team knows when you're reachable."
+              )
+            }}
+          </span>
         </div>
+        <AvailabilityMenu />
+      </div>
+      <div class="flex items-center justify-between mt-6">
+        <div class="flex flex-col gap-1">
+          <span class="text-base-medium text-ink-gray-8">
+            {{ __("Emails & Signature") }}
+          </span>
+          <span class="text-p-sm text-ink-gray-6">
+            {{
+              __(
+                "Manage your account emails and email signature for communication."
+              )
+            }}
+          </span>
+        </div>
+        <Button
+          :label="__('Configure')"
+          @click="emit('updateStep', 'user-email-settings')"
+        />
+      </div>
+      <div class="flex items-center justify-between mt-6">
+        <div class="flex flex-col gap-1">
+          <span class="text-base-medium text-ink-gray-8">
+            {{ __("Password") }}
+          </span>
+          <span class="text-p-sm text-ink-gray-6">{{
+            __("Change your account password for security.")
+          }}</span>
+        </div>
+        <Button
+          icon-left="lucide-lock"
+          :label="__('Change Password')"
+          @click="showChangePasswordModal = true"
+        />
       </div>
     </template>
   </SettingsLayoutBase>
@@ -150,120 +162,77 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import LucideX from "~icons/lucide/x";
 import {
   Avatar,
-  Badge,
   Button,
-  createResource,
-  Dropdown,
+  createDocumentResource,
   FileUploader,
   LoadingIndicator,
   toast,
 } from "frappe-ui";
-import { __ } from "@/translation";
+import { computed, nextTick, ref, useTemplateRef } from "vue";
+
 import { useAuthStore } from "@/stores/auth";
-import CameraIcon from "~icons/lucide/camera";
-import ChangePasswordModal from "./components/ChangePasswordModal.vue";
-import { disableSettingModalOutsideClick } from "../settingsModal";
+import { __ } from "@/translation";
+import EditIcon from "~icons/lucide/edit";
+const emit = defineEmits(["updateStep"]);
+
+import AvailabilityMenu from "@/components/AvailabilityMenu.vue";
 import SettingsLayoutBase from "@/components/layouts/SettingsLayoutBase.vue";
-import Link from "@/components/frappe-ui/Link.vue";
+import { useAvailability } from "@/composables/useAvailability";
+import { useAgentStatusStore } from "@/stores/agentStatus";
+import ChangePasswordModal from "./components/ChangePasswordModal.vue";
 
-const auth = useAuthStore();
-const profile = ref({
-  fullName: auth.userName,
-  userImage: auth.userImage,
-  firstName: auth.userFirstName,
-  lastName: auth.userLastName,
-});
+const agentStatusStore = useAgentStatusStore();
 const showChangePasswordModal = ref(false);
-const language = ref(auth.language);
 
-const isLanguageChanged = computed(() => {
-  return language.value !== auth?.language;
-});
+const { userId, hasAgentRecord } = useAuthStore();
+const user = createDocumentResource({ doctype: "User", name: userId });
 
-const isAccountInfoDirty = computed(() => {
-  const agentName = agentData.data?.agent_name?.split(" ");
-  if (!agentName) return false;
-  const isDirty =
-    profile.value.firstName !== agentName[0] ||
-    profile.value.lastName !== (agentName[1] || "");
-  if (isDirty) {
-    disableSettingModalOutsideClick.value = true;
-  } else {
-    disableSettingModalOutsideClick.value = false;
-  }
-  return isDirty;
-});
+const editName = ref(false);
 
-const agentData = createResource({
-  url: "helpdesk.helpdesk.doctype.hd_agent.hd_agent.get_agent",
-  auto: true,
-  onSuccess: (data) => {
-    const fullName = data.agent_name.split(" ");
-    profile.value = {
-      fullName: data.agent_name,
-      firstName: fullName[0],
-      lastName: fullName[1] || "",
-      userImage: data.user_image,
-    };
+const uploadTooltip = computed(() =>
+  user.doc?.user_image ? __("Change Photo") : __("Upload Photo")
+);
+
+const fullNameRef = useTemplateRef("fullNameRef");
+const fullName = computed({
+  get: () => user.doc?.full_name ?? "",
+  set: (val) => {
+    if (!user.doc) return;
+    const [firstName, ...lastName] = val.split(" ");
+    user.doc.first_name = firstName;
+    user.doc.last_name = lastName.join(" ");
   },
 });
 
-const setAgent = createResource({
-  url: "frappe.client.set_value",
-  validate: () => {
-    if (!profile.value.firstName.trim()) {
-      return __("Please enter first name at least");
-    }
-  },
-  makeParams() {
-    return {
-      doctype: "HD Agent",
-      name: agentData.data?.name,
-      fieldname: {
-        agent_name: `${profile.value.firstName} ${profile.value.lastName}`,
-        user_image: profile.value.userImage,
-      },
-    };
-  },
-  onSuccess: () => {
-    auth.reloadUser();
-    agentData.reload();
-    toast.success(__("Profile updated"));
-  },
+function editFullName() {
+  editName.value = true;
+  nextTick(() => fullNameRef.value?.focus());
+}
+
+const isNameDirty = computed(() => {
+  return (
+    user.doc?.first_name !== user.originalDoc?.first_name ||
+    user.doc?.last_name !== user.originalDoc?.last_name
+  );
 });
 
-const saveLanguageResource = createResource({
-  url: "frappe.client.set_value",
-  makeParams() {
-    return {
-      doctype: "User",
-      name: auth.userId,
-      fieldname: {
-        language: language.value,
-      },
-    };
-  },
-  onSuccess() {
-    toast.success(__("Language updated"));
-    window.location.reload();
-  },
-});
+function save() {
+  user.save.submit(null, {
+    onSuccess: () => {
+      editName.value = false;
+      toast.success(__("Profile updated successfully."));
+    },
+    onError: (err: { message: string; messages: string[] }) => {
+      toast.error(err.message + ": " + err.messages[0]);
+    },
+  });
+}
 
-const onSave = () => {
-  if (isAccountInfoDirty.value) {
-    setAgent.submit();
-  }
-
-  if (isLanguageChanged.value) {
-    saveLanguageResource.submit();
-  }
-};
-
-const updateImage = (file: string | null) => {
-  profile.value.userImage = file;
-  setAgent.submit();
-};
+function updateImage(fileUrl = "") {
+  user.doc.user_image = fileUrl;
+  save();
+}
 </script>

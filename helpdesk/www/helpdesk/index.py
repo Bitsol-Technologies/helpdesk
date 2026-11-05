@@ -1,14 +1,18 @@
 import frappe
 from frappe import _
 from frappe.integrations.frappe_providers.frappecloud_billing import is_fc_site
-from frappe.utils import cint
+from frappe.utils import cint, get_system_timezone
+from frappe.utils.jinja_globals import is_rtl
 from frappe.utils.telemetry import capture
+
+from helpdesk.integrations import frappe_cloud
+from helpdesk.utils import get_agent_name
 
 no_cache = 1
 
 
 def get_context(context):
-    frappe.db.commit()
+    frappe.db.commit()  # nosemgrep
     context.boot = get_boot()
 
     # telemetry
@@ -34,8 +38,19 @@ def get_boot():
             "setup_complete": cint(frappe.get_system_settings("setup_complete")),
             "is_fc_site": is_fc_site(),
             "session_user": frappe.session.user,
+            "agent": get_agent_name(),
             "date_format": frappe.get_system_settings("date_format"),
             "time_format": frappe.get_system_settings("time_format"),
+            "default_country": frappe.db.get_default("country"),
+            "timezone": {
+                "system": get_system_timezone(),
+                "user": frappe.db.get_value("User", frappe.session.user, "time_zone")
+                or get_system_timezone(),
+            },
+            "lang": frappe.local.lang,
+            "dir": "rtl" if is_rtl() else "ltr",
+            "apps": frappe.get_installed_apps(),
+            "cloud_settings": frappe_cloud.get_boot_context(),
         }
     )
 

@@ -9,7 +9,10 @@
   "user",
   "agent_name",
   "user_image",
-  "is_active"
+  "is_active",
+  "availability",
+  "availability_changed_on",
+  "availability_changed_by"
  ],
  "fields": [
   {
@@ -38,25 +41,35 @@
    "fieldname": "user_image",
    "fieldtype": "Attach Image",
    "label": "Image"
+  },
+  {
+   "fieldname": "availability",
+   "fieldtype": "Link",
+   "label": "Availability",
+   "options": "HD Agent Status"
+  },
+  {
+   "fieldname": "availability_changed_on",
+   "fieldtype": "Datetime",
+   "label": "Availability Changed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "availability_changed_by",
+   "fieldtype": "Link",
+   "label": "Availability Changed By",
+   "options": "User",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-19 23:22:29.075052",
+ "modified": "2026-09-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Helpdesk",
  "name": "HD Agent",
  "owner": "Administrator",
  "permissions": [
-  {
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "report": 1,
-   "role": "All",
-   "select": 1,
-   "share": 1
-  },
   {
    "create": 1,
    "delete": 1,
@@ -70,7 +83,6 @@
    "write": 1
   },
   {
-   "create": 1,
    "delete": 1,
    "email": 1,
    "export": 1,
@@ -87,5 +99,6 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "title_field": "agent_name"
+ "title_field": "agent_name",
+ "track_changes": 1
 }

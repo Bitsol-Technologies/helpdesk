@@ -1,9 +1,10 @@
-import { socket } from "@/socket";
 import { createResource } from "frappe-ui";
 import { defineStore } from "pinia";
 import { computed, ComputedRef } from "vue";
+import { globalStore } from "./globalStore";
 
 export const useConfigStore = defineStore("config", () => {
+  const { $socket } = globalStore();
   const configResource = createResource({
     url: "helpdesk.api.config.get_config",
     auto: true,
@@ -32,8 +33,11 @@ export const useConfigStore = defineStore("config", () => {
   const isFeedbackMandatory = computed(
     () => !!parseInt(config.value.is_feedback_mandatory)
   );
+  const enableCommentReactions = computed(
+    () => !!parseInt(config.value.enable_comment_reactions)
+  );
 
-  socket.on("helpdesk:settings-updated", () => configResource.reload());
+  $socket.on("helpdesk:settings-updated", () => configResource.reload());
 
   return {
     configResource,
@@ -47,5 +51,6 @@ export const useConfigStore = defineStore("config", () => {
     teamRestrictionApplied,
     assignWithinTeam,
     disableGlobalScopeForSavedReplies,
+    enableCommentReactions,
   };
 });

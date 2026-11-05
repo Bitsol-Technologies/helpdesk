@@ -32,7 +32,26 @@
           @change="
             (e) => handleOnFieldChange(e, field.fieldname, field.fieldtype)
           "
-        />
+        >
+          <template v-if="field.fieldname === 'priority'" #label-extra>
+            <template
+              v-if="
+                ticketPriorityResource.dataMap[templateFields[field.fieldname]]
+                  ?.description
+              "
+            >
+              <Tooltip
+                :text="
+                  ticketPriorityResource.dataMap[
+                    templateFields[field.fieldname]
+                  ].description.trim()
+                "
+              >
+                <lucide-circle-question-mark class="h-4 w-4 text-ink-gray-6" />
+              </Tooltip>
+            </template>
+          </template>
+        </UniInput>
       </div>
       <!-- existing fields -->
       <div
@@ -40,25 +59,28 @@
         :class="(subject.length >= 2 || description.length) && 'gap-5'"
       >
         <div class="flex flex-col gap-2">
-          <span class="block text-sm text-gray-700">
+          <span class="block text-sm text-ink-gray-6">
             {{ __("Subject") }}
-            <span class="place-self-center text-red-500"> * </span>
+            <span class="place-self-center text-ink-red-5"> * </span>
           </span>
-          <FormControl
+          <!-- TextInput rings only on :focus-visible, so a click leaves the
+               field with no outline; class lands on its wrapper, not the input -->
+          <TextInput
             v-model="subject"
-            type="text"
+            variant="outline"
             :placeholder="__('A short description')"
+            maxlength="140"
           />
         </div>
         <SearchArticles
           v-if="isCustomerPortal"
           :query="subject"
-          class="shadow"
+          class="shadow-sm"
         />
         <div v-if="isCustomerPortal">
           <h4
             v-show="subject.length <= 2 && description.length === 0"
-            class="text-p-sm text-gray-500 ml-1"
+            class="text-p-sm text-ink-gray-4 ms-1"
           >
             {{ __("Please enter a subject to continue") }}
           </h4>
@@ -69,18 +91,27 @@
             v-model:content="description"
             :placeholder="__('Detailed explanation')"
             expand
-            :uploadFunction="(file:any)=>uploadFunction(file)"
+            :uploadFunction="
+              (file: any, options: any) =>
+                track(uploadFunction(file, null, null, true, options))
+            "
           >
             <template #bottom-right>
-              <Button
-                :label="__('Submit')"
-                theme="gray"
-                variant="solid"
-                :disabled="
-                  $refs.editor.editor.isEmpty || ticket.loading || !subject
-                "
-                @click="() => ticket.submit()"
-              />
+              <!-- A disabled button fires no pointer events, so the span
+                   carries the hover for the tooltip -->
+              <Tooltip
+                :text="isUploading ? __('Please wait, media is uploading') : ''"
+              >
+                <span class="inline-flex">
+                  <Button
+                    :label="__('Submit')"
+                    theme="gray"
+                    variant="solid"
+                    :disabled="!canSubmit"
+                    @click="() => ticket.submit()"
+                  />
+                </span>
+              </Tooltip>
             </template>
           </TicketTextEditor>
         </div>
@@ -94,17 +125,25 @@
           v-model:content="description"
           :placeholder="__('Detailed explanation')"
           expand
+          :uploadFunction="
+            (file: any, options: any) =>
+              track(uploadFunction(file, null, null, true, options))
+          "
         >
           <template #bottom-right>
-            <Button
-              :label="__('Submit')"
-              theme="gray"
-              variant="solid"
-              :disabled="
-                $refs.editor.editor.isEmpty || ticket.loading || !subject
-              "
-              @click="() => ticket.submit()"
-            />
+            <Tooltip
+              :text="isUploading ? __('Please wait, media is uploading') : ''"
+            >
+              <span class="inline-flex">
+                <Button
+                  :label="__('Submit')"
+                  theme="gray"
+                  variant="solid"
+                  :disabled="!canSubmit"
+                  @click="() => ticket.submit()"
+                />
+              </span>
+            </Tooltip>
           </template>
         </TicketTextEditor>
       </div>
@@ -123,18 +162,20 @@ import {
 import { useAuthStore } from "@/stores/auth";
 import { globalStore } from "@/stores/globalStore";
 import { capture } from "@/telemetry";
+import { __ } from "@/translation";
 import { Field } from "@/types";
-import { isCustomerPortal, uploadFunction } from "@/utils";
+import { useUploadTracker } from "@/composables/useUploadTracker";
+import { isContentEmpty, isCustomerPortal, uploadFunction } from "@/utils";
+import { useOnboarding } from "@framework/ui";
 import {
   Breadcrumbs,
   Button,
   call,
+  createListResource,
   createResource,
-  FormControl,
+  TextInput,
   usePageMeta,
 } from "frappe-ui";
-import { __ } from "@/translation";
-import { useOnboarding } from "frappe-ui/frappe";
 import sanitizeHtml from "sanitize-html";
 import { computed, defineAsyncComponent, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -154,10 +195,21 @@ const props = withDefaults(defineProps<P>(), {
 const route = useRoute();
 const router = useRouter();
 const { $dialog } = globalStore();
-const { updateOnboardingStep } = useOnboarding("helpdesk");
+const { updateOnboardingStep } = useOnboarding("helpdesk") ?? {};
 const { isManager, userId: userID } = useAuthStore();
+// Pre-filled by the command palette's "Create ticket …" fallback.
+const { isUploading, track } = useUploadTracker();
+// Read off the content model, not the editor ref: the ref is empty on the first
+// render, which let the button paint enabled before flipping to disabled
+const canSubmit = computed(
+  () =>
+    Boolean(subject.value) &&
+    !isContentEmpty(description.value) &&
+    !ticket.loading &&
+    !isUploading.value
+);
 
-const subject = ref("");
+const subject = ref(String(route.query.subject ?? ""));
 const description = ref("");
 const attachments = ref([]);
 const templateFields = reactive({});
@@ -188,6 +240,13 @@ function setupTemplateFields(fields) {
   });
 }
 
+const ticketPriorityResource = createListResource({
+  doctype: "HD Ticket Priority",
+  fields: ["name", "description"],
+  auto: true,
+  cache: "ticketPriorities",
+});
+
 let oldFields = [];
 
 function applyFilters(fieldname: string, filters: any = null) {
@@ -203,9 +262,7 @@ function applyFilters(fieldname: string, filters: any = null) {
 const customOnChange = computed(() => template.data?._customOnChange);
 
 const visibleFields = computed(() => {
-  let _fields = template.data?.fields?.filter(
-    (f) => !isCustomerPortal.value || !f.hide_from_customer
-  );
+  let _fields = template.data?.fields;
   if (!_fields) return [];
   return _fields.map((field) => parseField(field, templateFields));
 });
@@ -249,21 +306,9 @@ const ticket = createResource({
       },
     });
     if (isManager) {
-      updateOnboardingStep("create_first_ticket", true, false, () =>
+      updateOnboardingStep?.("create_first_ticket", true, false, () =>
         localStorage.setItem("firstTicket", data.name)
       );
-    }
-    // only capture telemetry for customer portal
-    if (isCustomerPortal.value) {
-      capture("new_ticket_submitted", {
-        data: {
-          user: userID,
-          ticketID: data.name,
-          subject: subject.value,
-          description: description.value,
-          customFields: templateFields,
-        },
-      });
     }
   },
 });

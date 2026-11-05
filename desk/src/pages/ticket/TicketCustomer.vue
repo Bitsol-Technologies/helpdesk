@@ -2,7 +2,7 @@
   <div v-if="ticket.data" class="flex flex-col">
     <LayoutHeader>
       <template #left-header>
-        <Breadcrumbs :items="breadcrumbs" />
+        <Breadcrumbs :items="breadcrumbs" class="-ms-0.5" />
       </template>
       <template #right-header>
         <CustomActions
@@ -25,11 +25,39 @@
     <div class="flex overflow-hidden h-full w-full">
       <!-- Main Ticket Comm -->
       <section class="flex flex-col flex-1 w-full md:max-w-[calc(100%-382px)]">
-        <!-- show for only mobile -->
-        <TicketCustomerTemplateFields v-if="isMobileView" />
-
-        <TicketConversation class="grow" />
         <div
+          class="px-6 md:px-10 mt-6"
+          v-if="outsideHourSettings.data?.show && !isDismissed"
+        >
+          <Alert
+            v-if="outsideHourSettings.data?.show"
+            :title="outsideHourSettings.data?.msg"
+            theme="amber"
+            dismissible
+            class="text-p-sm [&_.size-4]:relative [&>.size-4]:top-[3.5px] [&_button>:first-child]:top-[2.25px] border border-outline-amber-2"
+            @dismiss="dismissBanner"
+          >
+          </Alert>
+        </div>
+        <!-- Mobile: Activity / Details tabs -->
+        <Tabs
+          v-if="isMobileView"
+          v-model="activeTab"
+          :tabs="tabs"
+          size="md"
+          class="flex-1 overflow-hidden [&_[role='tablist']]:px-3 [&_[role='tablist']]:py-1.5 [&_[role='tabpanel'][data-state='active']]:flex-1 [&_[role='tabpanel'][data-state='active']]:flex [&_[role='tabpanel'][data-state='active']]:flex-col [&_[role='tabpanel'][data-state='active']]:overflow-auto [&_[role='tabpanel'][data-state='active']]:min-h-0"
+        >
+          <template #tab-panel="{ tab }">
+            <TicketCustomerTemplateFields v-if="tab.value === 'details'" />
+            <TicketConversation v-else :show-header="false" class="grow" />
+          </template>
+        </Tabs>
+
+        <!-- Desktop: conversation -->
+        <TicketConversation v-else class="grow" />
+
+        <div
+          v-if="!isMobileView || activeTab === 'activity'"
           class="w-full p-5"
           @keydown.ctrl.enter.capture.stop="sendEmail"
           @keydown.meta.enter.capture.stop="sendEmail"
@@ -44,18 +72,29 @@
             autofocus
             @clear="() => (isExpanded = false)"
             :uploadFunction="
-              (file: any) => uploadFunction(file, 'HD Ticket', props.ticketId)
+              (file: any, options: any) =>
+                track(
+                  uploadFunction(file, 'HD Ticket', props.ticketId, true, options)
+                )
             "
           >
             <template #bottom-right>
-              <Button
-                :label="__('Send')"
-                theme="gray"
-                variant="solid"
-                :disabled="$refs.editor?.editor.isEmpty || send.loading"
-                :loading="send.loading"
-                @click="sendEmail"
-              />
+              <!-- A disabled button fires no pointer events, so the span carries
+                   the hover for the tooltip -->
+              <Tooltip
+                :text="isUploading ? __('Please wait, media is uploading') : ''"
+              >
+                <span class="inline-flex">
+                  <Button
+                    :label="__('Send')"
+                    theme="gray"
+                    variant="solid"
+                    :disabled="!canSend"
+                    :loading="send.loading"
+                    @click="sendEmail"
+                  />
+                </span>
+              </Tooltip>
             </template>
           </TicketTextEditor>
         </div>
@@ -70,16 +109,31 @@
 <script setup lang="ts">
 import { LayoutHeader } from "@/components";
 import TicketCustomerSidebar from "@/components/ticket/TicketCustomerSidebar.vue";
-import { setupCustomizations } from "@/composables/formCustomisation";
+import {
+  createToast,
+  setupCustomizations,
+} from "@/composables/formCustomisation";
 import { useActiveViewers } from "@/composables/realtime";
 import { useScreenSize } from "@/composables/screen";
-import { socket } from "@/socket";
 import { useConfigStore } from "@/stores/config";
 import { globalStore } from "@/stores/globalStore";
 import { useTicketStatusStore } from "@/stores/ticketStatus";
-import { isContentEmpty, isCustomerPortal, uploadFunction } from "@/utils";
-import { Breadcrumbs, Button, call, createResource, toast } from "frappe-ui";
 import { __ } from "@/translation";
+import { useUploadTracker } from "@/composables/useUploadTracker";
+import { isContentEmpty, uploadFunction } from "@/utils";
+import LucideWarning from "~icons/lucide/triangle-alert";
+import { ActivityIcon, DetailsIcon } from "@/components/icons";
+import {
+  Alert,
+  Breadcrumbs,
+  Button,
+  call,
+  createResource,
+  Tabs,
+  toast,
+  Tooltip,
+  type FrappeResourceError,
+} from "frappe-ui";
 import {
   computed,
   defineAsyncComponent,
@@ -101,7 +155,6 @@ interface P {
   ticketId: string;
 }
 const router = useRouter();
-
 const props = defineProps<P>();
 
 const { getStatus } = useTicketStatusStore();
@@ -111,7 +164,6 @@ const ticket = createResource({
   cache: ["Ticket", props.ticketId],
   params: {
     name: props.ticketId,
-    is_customer_portal: isCustomerPortal.value,
   },
   auto: true,
   onSuccess: (data) => {
@@ -123,16 +175,28 @@ const ticket = createResource({
       toast,
       $dialog,
       updateField,
-      createToast: toast.create,
+      createToast,
     });
   },
-  onError: () => {
-    toast.error(__("Ticket not found"));
+  onError: (err: FrappeResourceError) => {
+    if (err.exc_type === "DoesNotExistError") {
+      toast.error(__("Ticket not found."));
+    } else {
+      toast.error(err.messages?.[0] || __("Could not load the ticket."));
+    }
     router.replace("/my-tickets");
   },
 });
 
 provide(ITicket, ticket);
+const { isUploading, track } = useUploadTracker();
+
+// Read off the content model, not the editor ref: the ref is empty on the first
+// render, which let the button paint enabled before flipping to disabled
+const canSend = computed(
+  () =>
+    !isContentEmpty(editorContent.value) && !send.loading && !isUploading.value
+);
 const editor = ref(null);
 const editorContent = ref("");
 const attachments = ref([]);
@@ -140,7 +204,82 @@ const showFeedbackDialog = ref(false);
 const isExpanded = ref(false);
 
 const { isMobileView } = useScreenSize();
-const { $dialog } = globalStore();
+const { $dialog, $socket } = globalStore();
+const isDismissed = ref(false);
+
+const activeTab = ref("activity");
+const tabs = computed(() => [
+  { value: "activity", label: __("Activity"), iconLeft: ActivityIcon },
+  { value: "details", label: __("Details"), iconLeft: DetailsIcon },
+]);
+
+function getTodayKey() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function dismissBanner() {
+  try {
+    const todayKey = getTodayKey();
+    localStorage.setItem(`dismissBanner_${props.ticketId}_${todayKey}`, "true");
+    isDismissed.value = true;
+  } catch (error) {
+    console.error("Error saving banner dismissal:", error);
+  }
+}
+
+onMounted(() => {
+  try {
+    const todayKey = getTodayKey();
+    const dismissed = localStorage.getItem(
+      `dismissBanner_${props.ticketId}_${todayKey}`
+    );
+    isDismissed.value = dismissed === "true";
+    cleanupOldBannerDismissals();
+  } catch (error) {
+    console.error("Error reading banner dismissal:", error);
+  }
+});
+
+// Clean up old banner dismissal localStorage keys
+const cleanupOldBannerDismissals = () => {
+  const CLEANUP_KEY = "lastBannerCleanup";
+  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+  try {
+    const lastCleanup = localStorage.getItem(CLEANUP_KEY);
+    const now = Date.now();
+
+    if (lastCleanup && now - parseInt(lastCleanup) < ONE_WEEK_MS) {
+      return;
+    }
+
+    // Find and remove all dismissBanner keys
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("dismissBanner_")) {
+        keysToRemove.push(key);
+      }
+    }
+
+    // Remove the keys
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+
+    // Update last cleanup timestamp
+    localStorage.setItem(CLEANUP_KEY, now.toString());
+  } catch (error) {
+    console.error("Error cleaning up banner dismissals:", error);
+  }
+};
+
+const outsideHourSettings = createResource({
+  url: "helpdesk.helpdesk.doctype.hd_ticket.api.show_outside_hours_banner",
+  cache: ["OutsideHourBanner", props.ticketId],
+  params: {
+    ticket_name: props.ticketId,
+  },
+  auto: true,
+});
 
 const send = createResource({
   url: "run_doc_method",
@@ -168,9 +307,8 @@ function updateField(name, value, callback = () => {}) {
 }
 
 function sendEmail() {
-  if (isContentEmpty(editorContent.value) || send.loading) {
-    return;
-  }
+  // The keyboard shortcut reaches here without passing the disabled button
+  if (!canSend.value) return;
   send.submit();
 }
 
@@ -186,7 +324,7 @@ function updateTicket(fieldname: string, value: string) {
     auto: true,
     onSuccess: () => {
       ticket.reload();
-      toast.success(__("Ticket updated"));
+      toast.success(__("Ticket updated succesfully."));
     },
   });
 }
@@ -207,13 +345,13 @@ function showConfirmationDialog() {
       {
         label: __("Confirm"),
         variant: "solid",
-        onClick(close: Function) {
+        onClick({ close }: { close: () => void }) {
           ticket.data.status = "Closed";
           setValue.submit(
             { fieldname: "status", value: "Closed" },
             {
               onSuccess: () => {
-                toast.success(__("Ticket closed"));
+                toast.success(__("Ticket closed successfully."));
               },
             }
           );
@@ -261,12 +399,13 @@ const showFeedback = computed(() => {
   return hasAgentCommunication && isFeedbackMandatory;
 });
 const { startViewing, stopViewing } = useActiveViewers(props.ticketId);
+
 onMounted(() => {
   startViewing(props.ticketId);
   document.title = props.ticketId;
 
-  socket.on("helpdesk:ticket-update", ({ ticket_id }) => {
-    if (ticket_id === props.ticketId) {
+  $socket.on("helpdesk:ticket-update", ({ ticket_id }) => {
+    if (ticket_id == props.ticketId) {
       ticket.reload();
     }
   });
@@ -275,6 +414,6 @@ onMounted(() => {
 onUnmounted(() => {
   stopViewing(props.ticketId);
   document.title = "Helpdesk";
-  socket.off("helpdesk:ticket-update");
+  $socket.off("helpdesk:ticket-update");
 });
 </script>

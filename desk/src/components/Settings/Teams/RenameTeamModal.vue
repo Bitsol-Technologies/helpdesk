@@ -1,6 +1,10 @@
 <template>
-  <Dialog v-model="dialog.show" :options="renameDialogOptions">
-    <template #body-content>
+  <Dialog
+    v-model:open="dialog.show"
+    :title="renameDialogOptions.title"
+    :message="renameDialogOptions.message"
+  >
+    <template #default>
       <FormControl
         v-model="teamName"
         :label="__('Title')"
@@ -10,6 +14,7 @@
     <template #actions>
       <Button
         variant="solid"
+        class="flex w-full"
         @click="renameTeam"
         :loading="renameTeamResource.loading"
         :disabled="teamName == dialog.teamName || teamName.trim() == ''"
@@ -48,7 +53,7 @@ const renameTeamResource = createResource({
       return __("New and old title cannot be same");
   },
   onSuccess(data) {
-    toast.success(__("Team renamed"));
+    toast.success(__("Team renamed successfully."));
     dialog.value.show = false;
     emit("onRename", data);
   },

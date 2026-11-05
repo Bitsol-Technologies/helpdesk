@@ -1,94 +1,17 @@
 <template>
   <TransitionRoot :show="sidebarOpened">
-    <Dialog as="div" @close="sidebarOpened = false" class="fixed inset-0 z-40">
+    <Dialog as="div" @close="sidebarOpened = false" class="fixed inset-0">
       <TransitionChild
         as="template"
         enter="transition ease-in-out duration-200 transform"
-        enter-from="-translate-x-full"
+        enter-from="-translate-x-full rtl:translate-x-full"
         enter-to="translate-x-0"
         leave="transition ease-in-out duration-200 transform"
         leave-from="translate-x-0"
-        leave-to="-translate-x-full"
+        leave-to="-translate-x-full rtl:translate-x-full"
       >
-        <div
-          class="relative z-10 flex h-full w-[230px] flex-col border-r bg-gray-50 transition-all duration-300 ease-in-out"
-        >
-          <!-- user dropwdown -->
-          <div class="p-1">
-            <UserMenu :options="profileSettings" />
-          </div>
-          <!-- notifications -->
-          <div class="overflow-y-auto px-2" v-if="!isCustomerPortal">
-            <div class="mb-3 flex flex-col gap-1">
-              <SidebarLink
-                class="relative"
-                label="Notifications"
-                :icon="LucideBell"
-                :on-click="() => (sidebarOpened = false)"
-                :is-expanded="true"
-                to="Notifications"
-              >
-                <template #right>
-                  <Badge
-                    v-if="notificationStore.unread"
-                    :label="notificationStore.unread"
-                    theme="gray"
-                    variant="subtle"
-                  />
-                </template>
-              </SidebarLink>
-              <SidebarLink
-                v-if="!isCustomerPortal"
-                class="relative"
-                label="Dashboard"
-                :icon="LucideLayoutDashboard"
-                :to="'Dashboard'"
-                :is-active="isActiveTab('Dashboard')"
-                :is-expanded="true"
-              />
-            </div>
-          </div>
-
-          <div v-for="view in allViews" :key="view.label">
-            <div
-              v-if="!view.hideLabel && view.views?.length"
-              class="mx-2 my-2 h-1"
-            />
-            <Section
-              :label="view.label"
-              :hideLabel="view.hideLabel"
-              :opened="view.opened"
-            >
-              <template #header="{ opened, hide, toggle }">
-                <div
-                  v-if="!hide"
-                  class="flex cursor-pointer gap-1.5 px-1 text-base font-medium text-ink-gray-5 transition-all duration-300 ease-in-out"
-                  :class="'ml-2 mt-4 h-7 w-auto opacity-100'"
-                  @click="toggle()"
-                >
-                  <FeatherIcon
-                    name="chevron-right"
-                    class="h-4 text-ink-gray-9 transition-all duration-300 ease-in-out"
-                    :class="{ 'rotate-90': opened }"
-                  />
-                  <span>{{ view.label }}</span>
-                </div>
-              </template>
-              <nav class="flex flex-col ml-2 mr-1">
-                <SidebarLink
-                  v-for="link in view.views"
-                  :icon="link.icon"
-                  :label="link.label"
-                  :to="link.to"
-                  :key="link.label"
-                  :is-expanded="true"
-                  :is-active="isActiveTab(link.to)"
-                  class="my-0.5"
-                  :onClick="link.onClick"
-                />
-              </nav>
-            </Section>
-          </div>
+        <div class="relative z-10 h-full w-fit">
+          <AppSidebar mobile :profile-settings="profileSettings" />
         </div>
       </TransitionChild>
       <TransitionChild
@@ -100,7 +23,7 @@
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
-        <DialogOverlay class="fixed inset-0 bg-gray-600 bg-opacity-50" />
+        <DialogOverlay class="fixed inset-0 bg-surface-gray-7/50" />
       </TransitionChild>
     </Dialog>
   </TransitionRoot>
@@ -113,130 +36,100 @@ import {
   TransitionChild,
   TransitionRoot,
 } from "@headlessui/vue";
-import { computed, markRaw, onMounted } from "vue";
+import { computed, h, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-
-import { Section } from "@/components";
-import SidebarLink from "@/components/SidebarLink.vue";
-import UserMenu from "@/components/UserMenu.vue";
-import { useNotificationStore } from "@/stores/notification";
-
-import { mobileSidebarOpened as sidebarOpened } from "@/composables/mobile";
-import { currentView, useView } from "@/composables/useView";
-
-import LucideBell from "~icons/lucide/bell";
-import LucideLayoutDashboard from "~icons/lucide/layout-dashboard";
 
 import { useAuthStore } from "@/stores/auth";
 import { isCustomerPortal } from "@/utils";
-import Apps from "../Apps.vue";
-import {
-  agentPortalSidebarOptions,
-  customerPortalSidebarOptions,
-} from "./layoutSettings";
-import { useTelephonyStore } from "@/stores/telephony";
-import { storeToRefs } from "pinia";
-const { pinnedViews, publicViews } = useView();
+import { useColorScheme } from "frappe-ui";
+import LucideMoon from "~icons/lucide/moon";
+import LucideSun from "~icons/lucide/sun";
 
-const notificationStore = useNotificationStore();
+import { mobileSidebarOpened as sidebarOpened } from "@/composables/mobile";
+import { useApps } from "@/composables/useApps";
+import { __ } from "@/translation";
+import AppSidebar from "./AppSidebar.vue";
+import { useAgentStatusStore } from "@/stores/agentStatus";
+
+const { colorScheme, toggleColorScheme } = useColorScheme();
+const { appsMenuOption } = useApps();
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
-const telephonyStore = useTelephonyStore();
-const { isCallingEnabled } = storeToRefs(telephonyStore);
 
-const allViews = computed(() => {
-  let items = isCustomerPortal.value
-    ? customerPortalSidebarOptions
-    : agentPortalSidebarOptions;
+const agentStatusStore = useAgentStatusStore();
 
-  if (!isCallingEnabled.value) {
-    items = items.filter((item) => item.label !== "Call Logs");
-  }
+// The menu injects `size-4` onto icon components; keep that as the outer
+// footprint (so it lines up with the lucide icons) and center the actual
+// 2.5 dot inside it, same as the availability indicator elsewhere.
+const statusDot = (status: string) =>
+  h("span", { class: "flex items-center justify-center" }, [
+    h("span", {
+      class: [
+        "size-2.5 shrink-0 rounded-full",
+        agentStatusStore.statusColor(status),
+      ],
+    }),
+  ]);
 
-  const options = [
-    {
-      label: "All Views",
-      hideLabel: true,
-      opened: true,
-      views: items,
-    },
-  ];
-  if (publicViews.value?.length && !isCustomerPortal.value) {
-    options.push({
-      label: "Public Views",
-      opened: true,
-      hideLabel: false,
-      views: parseViews(publicViews.value),
-    });
-  }
-  if (pinnedViews.value?.length) {
-    options.push({
-      label: "Private Views",
-      opened: true,
-      hideLabel: false,
-      views: parseViews(pinnedViews.value),
-    });
-  }
-  return options;
-});
-function parseViews(views) {
-  return views.map((view) => {
-    return {
-      label: view.label,
-      icon: view.icon,
-      to: {
-        name: view.route_name,
-        query: { view: view.name },
-      },
-      onClick: () => {
-        currentView.value = {
-          label: view.label,
-          icon: view.icon,
-        };
-      },
-    };
-  });
-}
+// Native Dropdown submenu (same pattern as appsMenuOption) instead of a nested
+// Popover: reka-ui keeps the submenu inside the viewport on narrow screens,
+// where a right-placed popover overlapped the menu items below it.
+const availabilityMenuOption = computed(() => ({
+  label: agentStatusStore.myStatus
+    ? __(agentStatusStore.myStatus)
+    : __("Set status"),
+  icon: () => statusDot(agentStatusStore.myStatus),
+  submenu: agentStatusStore.statusOptions.map((option) => ({
+    label: __(option),
+    icon: () => statusDot(option),
+    onClick: () => agentStatusStore.setMyStatus(option),
+  })),
+}));
+
+const themeMenuItem = computed(() => ({
+  label: __("Toggle theme"),
+  icon: colorScheme.value === "dark" ? LucideSun : LucideMoon,
+  onClick: () => toggleColorScheme(),
+}));
 
 const customerPortalDropdown = computed(() => [
   {
-    label: "Home",
-    icon: "home",
+    label: __("Home"),
+    icon: "lucide-home",
     onClick: () => window.location.replace(window.location.origin + "/app"),
   },
   {
-    label: "Log out",
-    icon: "log-out",
+    label: __("Log out"),
+    icon: "lucide-log-out",
     onClick: () => authStore.logout(),
   },
 ]);
 
 const agentPortalDropdown = computed(() => [
+  appsMenuOption.value,
+  ...(authStore.hasAgentRecord ? [availabilityMenuOption.value] : []),
   {
-    component: markRaw(Apps),
-  },
-  {
-    label: "Customer portal",
-    icon: "users",
+    label: __("Customer portal"),
+    icon: "lucide-users",
     onClick: () => {
       const path = router.resolve({ name: "TicketsCustomer" });
       window.open(path.href);
     },
   },
   {
-    icon: "life-buoy",
-    label: "Support",
+    icon: "lucide-life-buoy",
+    label: __("Support"),
     onClick: () => window.open("https://t.me/frappedesk"),
   },
   {
-    icon: "book-open",
-    label: "Docs",
+    icon: "lucide-book-open",
+    label: __("Docs"),
     onClick: () => window.open("https://docs.frappe.io/helpdesk"),
   },
   {
-    label: "Log out",
-    icon: "log-out",
+    label: __("Log out"),
+    icon: "lucide-log-out",
     onClick: () => authStore.logout(),
   },
 ]);
@@ -247,12 +140,8 @@ const profileSettings = computed(() => {
     : agentPortalDropdown.value;
 });
 
-function isActiveTab(to: string) {
-  if (route.query.view) {
-    return route.query.view == to?.query?.view;
-  }
-  return route.name === to;
-}
+watch(
+  () => route.fullPath,
+  () => (sidebarOpened.value = false)
+);
 </script>
-
-<style scoped></style>
