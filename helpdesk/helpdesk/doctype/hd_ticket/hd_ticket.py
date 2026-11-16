@@ -26,7 +26,7 @@ from pypika.functions import Count
 from pypika.queries import Query
 from pypika.terms import Criterion
 
-from helpdesk.consts import SERVER_COMPUTED_FIELDS
+from helpdesk.consts import DEFAULT_TICKET_TYPE, SERVER_COMPUTED_FIELDS
 from helpdesk.helpdesk.doctype.hd_settings.helpers import (
     get_default_email_content,
     is_email_content_empty,
@@ -268,8 +268,14 @@ class HDTicket(Document, CustomerEditController):
     def set_ticket_type(self):
         if self.ticket_type:
             return
-        self.ticket_type = (
-            frappe.db.get_single_value("HD Settings", "default_ticket_type") or ""
+        # Bitsol: ticket_type is mandatory, so fall back to the system "Unspecified"
+        # type when HD Settings has no default (fresh installs, email/portal tickets).
+        self.ticket_type = frappe.db.get_single_value(
+            "HD Settings", "default_ticket_type"
+        ) or (
+            DEFAULT_TICKET_TYPE
+            if frappe.db.exists("HD Ticket Type", DEFAULT_TICKET_TYPE)
+            else ""
         )
 
     def set_raised_by(self):
