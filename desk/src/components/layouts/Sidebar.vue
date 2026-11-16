@@ -142,6 +142,17 @@ const isFCSite = ref(window.is_fc_site);
 
 const customerPortalDropdown = computed(() => [
   {
+    group: __("Navigation"),
+    hideLabel: true,
+    options: [
+      {
+        label: __("Home"),
+        icon: "lucide-home",
+        onClick: () => window.location.replace(window.location.origin + "/desk"),
+      },
+    ],
+  },
+  {
     group: __("Danger"),
     hideLabel: true,
     options: [

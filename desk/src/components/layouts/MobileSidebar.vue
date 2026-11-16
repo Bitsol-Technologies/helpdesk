@@ -95,6 +95,11 @@ const themeMenuItem = computed(() => ({
 
 const customerPortalDropdown = computed(() => [
   {
+    label: __("Home"),
+    icon: "lucide-home",
+    onClick: () => window.location.replace(window.location.origin + "/desk"),
+  },
+  {
     label: __("Log out"),
     icon: "lucide-log-out",
     onClick: () => authStore.logout(),

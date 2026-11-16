@@ -44,6 +44,32 @@ class TestGetListData(FrappeTestCase):
         cls.other_ticket = make_ticket(
             subject=f"{cls.token} other", raised_by=other["user"]
         ).name
+        cls.all_tickets = [*cls.tickets.values(), cls.own_ticket, cls.other_ticket]
+        cls.team = cls.join_team(cls.agent, cls.all_tickets)
+
+    @classmethod
+    def join_team(cls, agent: str, tickets: list[str]) -> str:
+        """Bitsol: an agent listing tickets without filters only sees the tickets
+        of the teams they belong to, so the agent and the tickets share a team.
+
+        A real HD Team insert leaks its assignment rule across test transactions,
+        so the membership row and the tickets' team are recorded directly.
+        """
+        team = f"Doc List Team {cls.token}"
+        frappe.get_doc(
+            {
+                "doctype": "HD Team Member",
+                "parenttype": "HD Team",
+                "parentfield": "users",
+                "parent": team,
+                "user": agent,
+            }
+        ).insert(ignore_permissions=True)
+        for ticket in tickets:
+            frappe.db.set_value(
+                "HD Ticket", ticket, "agent_group", team, update_modified=False
+            )
+        return team
 
     def test_filters_sort_and_pagination(self) -> None:
         with self.set_user(self.agent):
@@ -60,11 +86,57 @@ class TestGetListData(FrappeTestCase):
         self.assertEqual(result["total_count"], 3)
 
     def test_empty_filters_list_everything(self) -> None:
+        # Bitsol: only Administrator is exempt from the implicit team filter
         for empty in ({}, []):
-            with self.subTest(filters=empty), self.set_user(self.agent):
+            with self.subTest(filters=empty):
                 result = get_list_data("HD Ticket", filters=empty, page_length=1)
             self.assertEqual(result["row_count"], 1)
             self.assertGreaterEqual(result["total_count"], 5)
+
+    def test_empty_filters_list_only_team_tickets_for_agent(self) -> None:
+        for empty in ({}, []):
+            with self.subTest(filters=empty), self.set_user(self.agent):
+                result = get_list_data(
+                    "HD Ticket", filters=empty, rows=["agent_group"], page_length=1
+                )
+            self.assertEqual(result["row_count"], 1)
+            self.assertEqual(result["data"][0].agent_group, self.team)
+            self.assertEqual(result["total_count"], len(self.all_tickets))
+
+    def test_empty_filters_list_only_teamless_tickets_for_agent_without_team(
+        self,
+    ) -> None:
+        # Bitsol: an empty team list matches the tickets that have no team (as in v15)
+        teamless = create_agent(unique_email("doc-list-teamless")).name
+        # no token in the subject: the ticket outlives this test within the class
+        unteamed = make_ticket(subject="Doc list ticket without a team").name
+        self.addCleanup(frappe.delete_doc, "HD Ticket", unteamed, force=True)
+        frappe.db.set_value(
+            "HD Ticket", unteamed, "agent_group", None, update_modified=False
+        )
+        every_ticket = frappe.db.count("HD Ticket")
+
+        for empty in ({}, []):
+            with self.subTest(filters=empty), self.set_user(teamless):
+                result = get_list_data(
+                    "HD Ticket",
+                    filters=empty,
+                    rows=["agent_group"],
+                    page_length=every_ticket,
+                )
+            names = {row.name for row in result["data"]}
+            self.assertIn(unteamed, names)
+            self.assertFalse(names & set(self.all_tickets))
+            self.assertFalse([row.name for row in result["data"] if row.agent_group])
+            self.assertEqual(result["total_count"], len(names))
+
+    def test_any_filter_lifts_the_team_restriction(self) -> None:
+        teamless = create_agent(unique_email("doc-list-filtering")).name
+
+        with self.set_user(teamless):
+            result = get_list_data("HD Ticket", filters=self.subject_filter(self.token))
+
+        self.assertEqual(result["total_count"], len(self.all_tickets))
 
     def test_at_me_filter_resolves_to_session_user(self) -> None:
         filters = [["owner", "=", "@me"], *self.subject_filter(self.token)]

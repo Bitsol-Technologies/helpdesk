@@ -10,14 +10,17 @@
  "engine": "InnoDB",
  "field_order": [
   "subject_section",
+  "column_break_cmib",
   "subject",
   "raised_by",
   "status",
   "priority",
+  "to_month",
   "status_category",
   "cb00",
   "ticket_type",
   "agent_group",
+  "expected_due_date",
   "summary",
   "sb_details",
   "description",
@@ -28,6 +31,8 @@
   "sla",
   "response_by",
   "raised_outside_working_hours",
+  "first_response_failed_by",
+  "resolution_failed_by",
   "cb",
   "agreement_status",
   "resolution_by",
@@ -66,7 +71,8 @@
   "customer_feedback_section",
   "feedback_rating",
   "feedback",
-  "feedback_extra"
+  "feedback_extra",
+  "meta_tab"
  ],
  "fields": [
   {
@@ -111,10 +117,12 @@
    "fieldname": "priority",
    "fieldtype": "Link",
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Priority",
    "link_filters": "[[\"HD Ticket Priority\",\"disabled\",\"=\",0]]",
    "options": "HD Ticket Priority",
-   "permlevel": 7
+   "permlevel": 7,
+   "reqd": 1
   },
   {
    "fieldname": "cb00",
@@ -123,14 +131,18 @@
   {
    "fieldname": "ticket_type",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Ticket Type",
    "link_filters": "[[\"HD Ticket Type\",\"disabled\",\"=\",0]]",
    "options": "HD Ticket Type",
-   "permlevel": 7
+   "permlevel": 7,
+   "reqd": 1
   },
   {
    "fieldname": "agent_group",
    "fieldtype": "Link",
+   "in_global_search": 1,
+   "in_standard_filter": 1,
    "label": "Team",
    "link_filters": "[[\"HD Team\",\"disabled\",\"=\",0]]",
    "options": "HD Team",
@@ -423,6 +435,29 @@
    "label": "Feedback"
   },
   {
+   "fieldname": "meta_tab",
+   "fieldtype": "Tab Break",
+   "label": "Meta"
+  },
+  {
+   "fieldname": "expected_due_date",
+   "fieldtype": "Date",
+   "label": "Expected Due Date (YYYY-MM-DD)",
+   "placeholder": "YYYY-MM-DD eg: 2025-03-27"
+  },
+  {
+   "fieldname": "column_break_cmib",
+   "fieldtype": "Column Break",
+   "hidden": 1,
+   "show_on_timeline": 1
+  },
+  {
+   "depends_on": "eval: doc.ticket_type == \"Salary Slip Request\"",
+   "fieldname": "to_month",
+   "fieldtype": "Date",
+   "label": "To"
+  },
+  {
    "fieldname": "summary",
    "fieldtype": "Text Editor",
    "label": "Summary",
@@ -479,7 +514,7 @@
    "label": "Last Customer Response",
    "permlevel": 8,
    "read_only": 1
-    },
+  },
   {
    "default": "0",
    "fieldname": "raised_outside_working_hours",
@@ -510,7 +545,7 @@
  "icon": "fa fa-issue",
  "idx": 61,
  "links": [],
- "modified": "2026-09-30 12:00:00.000000",
+ "modified": "2026-11-15 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Helpdesk",
  "name": "HD Ticket",
@@ -537,6 +572,18 @@
    "read": 1,
    "report": 1,
    "role": "Agent",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Employee",
    "share": 1,
    "write": 1
   },
@@ -612,6 +659,12 @@
    "permlevel": 8,
    "read": 1,
    "role": "Agent Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 7,
+   "read": 1,
+   "role": "Employee",
    "write": 1
   }
  ],

@@ -13,6 +13,7 @@ from helpdesk.utils import (
     check_permissions,
     contact_default_columns,
     contact_default_rows,
+    is_agent,
     parse_call_logs,
 )
 
@@ -26,6 +27,7 @@ def get_list_data(
     filters: dict | list = {},
     default_filters: dict = {},
     order_by: str = "modified desc",
+    start: int = 0,
     page_length: int = 20,
     columns: list = [],
     rows: list = [],
@@ -45,6 +47,19 @@ def get_list_data(
     group_by_field = view.get("group_by_field") if view else None
     label_doc = view.get("label_doc") if view else None
     label_field = view.get("label_field") if view else None
+    # Bitsol: when no filters are passed, restrict agents (non-Administrator) to their
+    # teams' tickets. Only HD Ticket has `agent_group`, so other doctypes are left alone.
+    current_user = frappe.session.user
+    team_names = None
+    if (
+        doctype == "HD Ticket"
+        and current_user != "Administrator"
+        and not filters
+        and is_agent(current_user)
+    ):
+        team_names = frappe.get_all(
+            "HD Team Member", filters={"user": current_user}, pluck="parent"
+        )
 
     _list = get_controller(doctype)
     default_rows = []
@@ -99,6 +114,12 @@ def get_list_data(
                     else:
                         filters.append([key, "=", value])
 
+    if team_names is not None:
+        if isinstance(filters, dict):
+            filters["agent_group"] = ["in", team_names]
+        else:
+            filters.append(["agent_group", "in", team_names])
+
     handle_at_me_support(filters)
     handle_assigned_on_filter(filters, doctype)
 
@@ -125,6 +146,7 @@ def get_list_data(
             fields=rows,
             filters=filters,
             order_by=order_by,
+            limit_start=start,
             page_length=page_length,
         )
         or []
